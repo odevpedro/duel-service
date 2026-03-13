@@ -1,0 +1,10 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: duel-service
+
+logging:
+  level:
+    com.odevpedro.yugiohcollections.duel: DEBUG
