@@ -2,9 +2,9 @@ package com.odevpedro.yugiohcollections.duel.application.service.Impl;
 
 import com.odevpedro.yugiohcollections.duel.application.dto.DuelActionDTO;
 import com.odevpedro.yugiohcollections.duel.application.service.ActionService;
-import com.odevpedro.yugiohcollections.duel.application.service.PhaseService;
 import com.odevpedro.yugiohcollections.duel.domain.model.DuelState;
 import com.odevpedro.yugiohcollections.duel.domain.port.DuelRepositoryPort;
+import com.odevpedro.yugiohcollections.duel.domain.port.OcgCorePort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class ActionServiceImpl implements ActionService {
 
-    private final PhaseService phaseService;
+    private final OcgCorePort ocgCore;
     private final DuelRepositoryPort repository;
 
     @Override
@@ -22,36 +22,42 @@ public class ActionServiceImpl implements ActionService {
         DuelState state = repository.findById(action.getDuelId())
                 .orElseThrow(() -> new RuntimeException("Duel not found: " + action.getDuelId()));
 
-        if (!phaseService.isActionAllowed(state.getCurrentPhase(), action.getActionType())) {
-            throw new RuntimeException("Action not allowed in phase: " + state.getCurrentPhase());
+        if (!ocgCore.isActionValid(state, action, playerId)) {
+            throw new RuntimeException("Invalid action: " + action.getActionType()
+                    + " in phase " + state.getCurrentPhase());
         }
 
-        DuelState updated = switch (action.getActionType()) {
-            case "SUMMON" -> summon(state, playerId, action.getCardId(), action.getZoneIndex());
-            case "ATTACK" -> attack(state, playerId, action.getTargetId());
-            case "SPELL"  -> activateSpell(state, playerId, action.getCardId());
-            default -> throw new RuntimeException("Unknown action: " + action.getActionType());
-        };
-
+        DuelState updated = ocgCore.processAction(state, action, playerId);
         updated.setUpdatedAt(LocalDateTime.now());
+
         return repository.save(updated);
     }
 
     @Override
     public DuelState summon(DuelState state, String playerId, String cardId, int zoneIndex) {
-        // TODO: implement summon logic
-        return state;
+        DuelActionDTO action = new DuelActionDTO();
+        action.setDuelId(state.getDuelId());
+        action.setActionType("SUMMON");
+        action.setCardId(cardId);
+        action.setZoneIndex(zoneIndex);
+        return ocgCore.processAction(state, action, playerId);
     }
 
     @Override
     public DuelState attack(DuelState state, String attackerId, String targetId) {
-        // TODO: implement attack logic
-        return state;
+        DuelActionDTO action = new DuelActionDTO();
+        action.setDuelId(state.getDuelId());
+        action.setActionType("ATTACK");
+        action.setTargetId(targetId);
+        return ocgCore.processAction(state, action, attackerId);
     }
 
     @Override
     public DuelState activateSpell(DuelState state, String playerId, String cardId) {
-        // TODO: implement spell activation logic
-        return state;
+        DuelActionDTO action = new DuelActionDTO();
+        action.setDuelId(state.getDuelId());
+        action.setActionType("SPELL");
+        action.setCardId(cardId);
+        return ocgCore.processAction(state, action, playerId);
     }
 }
