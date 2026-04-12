@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: duel-service
+  profiles:
+    active: dev
 
 logging:
   level:

@@ -2,6 +2,7 @@ package com.odevpedro.yugiohcollections.duel.adapter.out.ocgcore;
 
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -9,13 +10,9 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-
-/**
- * Extrai a lib nativa de dentro do JAR para um diretório temporário
- * e a carrega via System.load — torna o JAR autocontido.
- */
 @Slf4j
 @Component
+@Profile("!dev")
 public class OcgCoreLoader {
 
     private static final String LIB_NAME = resolveLibName();
@@ -28,8 +25,8 @@ public class OcgCoreLoader {
         try (InputStream in = getClass().getResourceAsStream(RESOURCE_PATH)) {
             if (in == null) {
                 throw new IllegalStateException(
-                    "Native library not found in JAR: " + RESOURCE_PATH +
-                    "\nCompile the ocgcore and place it in src/main/resources/native/"
+                        "Native library not found in JAR: " + RESOURCE_PATH +
+                                "\nCompile the ocgcore and place it in src/main/resources/native/"
                 );
             }
 
