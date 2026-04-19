@@ -1,48 +1,49 @@
 # duel-service
 
-Real-time Yu-Gi-Oh! duel engine built with **Spring Boot** and **WebSocket (STOMP)**, powered by the **ocgcore** C++ engine via JNI. Part of the `yu-gi-oh-collections` microservices ecosystem.
+> Motor de duelos Yu-Gi-Oh! em tempo real dibangun dengan Spring Boot e WebSocket (STOMP), alimentado pelo motor C++ ocgcore via JNI. Parte do ecossistema de microsserviços yu-gi-oh-collections.
 
 ---
 
-## Overview
+## Sobre o Projeto
 
-The `duel-service` manages the full lifecycle of a Yu-Gi-Oh! duel — from creation to game over. It bridges the React frontend and the `ocgcore` C++ engine, handling real-time bidirectional communication, session management, and state synchronization between players.
-
-```
-React (Player A) ──┐
-                   ├──► WebSocket/STOMP ──► duel-service ──► JNI ──► ocgcore (C++)
-React (Player B) ──┘
-```
-
-Duels are initiated by the `community-service` when two players are matched via geolocation. The `duel-service` receives a `POST /api/duels` with both player IDs, creates the duel state, and opens the WebSocket session for real-time gameplay.
+API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integrando o frontend React com o motor C++ ocgcore via JNI. Gerencia ciclo de vida completo do duelo (criação a game over), comunicação bidirecional em tempo real e sincronização de estado entre jogadores.
 
 ---
 
-## Architecture
+## Stack & Arquitetura
 
-This service follows **Hexagonal Architecture (Ports & Adapters)**, consistent with the rest of the `yu-gi-oh-collections` monorepo.
+| Camada        | Tecnologia                          |
+|---------------|--------------------------------------|
+| Runtime       | Java 21                              |
+| Framework     | Spring Boot 3.2                      |
+| Real-time     | WebSocket + STOMP (SockJS)           |
+| Game Engine   | ocgcore (C++) via JNI                |
+| State Storage | In-memory (ConcurrentHashMap)        |
+| Build        | Gradle                               |
+| Testes        | JUnit / Spring Boot Test              |
+
+> Padrão arquitetural: **Hexagonal Architecture (Ports & Adapters)** com separação em camadas `adapter → application → domain`.
+
+---
+
+## Estrutura de Pastas
 
 ```
 src/main/java/com/odevpedro/yugiohcollections/duel/
-│
 ├── adapter/
 │   ├── in/
 │   │   ├── rest/                  # DuelController (POST /api/duels)
 │   │   └── websocket/             # DuelActionHandler, SessionHandler
 │   │       └── config/            # WebSocketConfig (STOMP)
 │   └── out/
-│       ├── messaging/             # DuelEventPublisher (SimpMessagingTemplate)
-│       ├── repository/            # InMemoryDuelRepository (ConcurrentHashMap)
+│       ├── messaging/             # DuelEventPublisher
+│       ├── repository/            # InMemoryDuelRepository
 │       └── ocgcore/               # OcgCoreBridge, OcgCoreAdapter, OcgCoreLoader
 │
 ├── application/
 │   ├── dto/                       # CreateDuelRequest, DuelResponse, DuelActionDTO
 │   ├── mapper/                    # DuelMapper
-│   └── service/
-│       ├── DuelApplicationService # interface
-│       ├── ActionService          # interface
-│       ├── PhaseService           # interface
-│       └── Impl/                  # implementations
+│   └── service/                   # interfaces e implementações
 │
 ├── config/                        # SecurityConfig, GlobalExceptionHandler, OcgCoreConfig
 │
@@ -54,55 +55,36 @@ src/main/java/com/odevpedro/yugiohcollections/duel/
 
 ---
 
-## Tech Stack
+## Como Rodar Localmente
 
-| Layer | Technology |
-|---|---|
-| Framework | Spring Boot 3.2 |
-| Real-time | WebSocket + STOMP (SockJS) |
-| Game engine | ocgcore (C++) via JNI |
-| State storage | In-memory (`ConcurrentHashMap`) |
-| Build | Gradle |
-| Java | 21 |
-
----
-
-## Prerequisites
+### Pré-requisitos
 
 - Java 21+
 - Gradle 8+
-- ocgcore compiled for your OS (see [Native Library](#native-library))
+- Biblioteca native ocgcore compilada (ver seção Biblioteca Nativa)
 
----
-
-## Getting Started
-
-**1. Clone the repository**
+### Setup
 
 ```bash
-git clone https://github.com/odevpedro/duel-service
-cd duel-service
-```
+# 1. Clone o repositório
+git clone https://github.com/odevpedro/duel-service && cd duel-service
 
-**2. Build and place the native library**
+# 2. Compile e coloque a biblioteca nativa
+# Ver seção abaixo
 
-See the [Native Library](#native-library) section below.
-
-**3. Run**
-
-```bash
+# 3. Execute
 ./gradlew bootRun
 ```
 
-The service starts on port `8084`.
+A API estará disponível em `http://localhost:8084`.
 
 ---
 
-## Native Library
+## Biblioteca Nativa
 
-The `duel-service` loads `ocgcore` as a native library at startup. The binary is not versioned — you must compile it locally and place it in `src/main/resources/native/`.
+O duel-service carrega `ocgcore` como biblioteca nativa via JNI. O binário não é versionado — você deve compilarlocalmente.
 
-**Building ocgcore**
+**Compilando ocgcore**
 
 ```bash
 git clone https://github.com/edo9300/ygopro-core
@@ -112,126 +94,19 @@ cmake .. -DCMAKE_BUILD_TYPE=Release
 cmake --build .
 ```
 
-**Placing the binary**
+**Colocando o binário**
 
-| OS | File | Destination |
+| OS | Arquivo | Destino |
 |---|---|---|
 | Windows | `ocgcore.dll` | `src/main/resources/native/ocgcore.dll` |
 | Linux | `libocgcore.so` | `src/main/resources/native/libocgcore.so` |
 | macOS | `libocgcore.dylib` | `src/main/resources/native/libocgcore.dylib` |
 
-The `OcgCoreLoader` extracts the binary from the JAR at runtime into a temp directory and loads it via `System.load` — no external configuration required.
+O `OcgCoreLoader` extrai o binário do JAR em runtime e carrega via `System.load`.
 
 ---
 
-## WebSocket API
-
-**Connection endpoint**
-
-```
-ws://localhost:8084/ws
-```
-
-SockJS fallback enabled. Connect using a STOMP client.
-
-**Subscribing to duel events**
-
-```javascript
-stompClient.subscribe(`/topic/duel/${duelId}`, (message) => {
-    const state = JSON.parse(message.body); // DuelState
-});
-
-stompClient.subscribe(`/topic/duel/${duelId}/over`, (message) => {
-    const winnerId = message.body;
-});
-```
-
-**Sending actions**
-
-```javascript
-// Perform a game action
-stompClient.publish({
-    destination: '/app/duel.action',
-    body: JSON.stringify({
-        duelId: 'abc-123',
-        actionType: 'SUMMON', // SUMMON | ATTACK | SPELL | SET
-        cardId: '42',
-        zoneIndex: 2
-    })
-});
-
-// Advance the phase
-stompClient.publish({
-    destination: '/app/duel.phase',
-    body: JSON.stringify({ duelId: 'abc-123' })
-});
-```
-
----
-
-## REST API
-
-**Create a duel**
-
-```http
-POST /api/duels
-Content-Type: application/json
-
-{
-  "playerAId": "uuid-player-1",
-  "playerBId": "uuid-player-2"
-}
-```
-
-```http
-HTTP/1.1 201 Created
-
-{
-  "duelId": "duel-abc-123",
-  "playerAId": "uuid-player-1",
-  "playerBId": "uuid-player-2",
-  "currentPhase": "DRAW",
-  "status": "IN_PROGRESS",
-  "turnNumber": 1,
-  "activePlayerId": "uuid-player-1"
-}
-```
-
-**Get duel state**
-
-```http
-GET /api/duels/{duelId}
-```
-
----
-
-## Duel Phases
-
-```
-DRAW → STANDBY → MAIN_1 → BATTLE → MAIN_2 → END → (next turn)
-```
-
-| Phase | Allowed actions |
-|---|---|
-| `MAIN_1`, `MAIN_2` | `SUMMON`, `SPELL`, `SET` |
-| `BATTLE` | `ATTACK` |
-| Others | none |
-
-All phase validation and action processing is delegated to `ocgcore`.
-
----
-
-## Integration
-
-This service integrates with the `yu-gi-oh-collections` ecosystem as follows:
-
-- **community-service** → creates duels via `POST /api/duels` after matching players
-- **auth-service** → JWT validation on WebSocket connections (via `SecurityConfig`)
-- **Frontend (React)** → connects via STOMP WebSocket for real-time gameplay
-
----
-
-## Running Tests
+## Testes
 
 ```bash
 ./gradlew test
@@ -239,26 +114,94 @@ This service integrates with the `yu-gi-oh-collections` ecosystem as follows:
 
 ---
 
-## Configuration
+## API — Endpoints Principais
 
-```yaml
-# src/main/resources/application.yml
-server:
-  port: 8084
+| Método | Rota                        | Descrição                        | Auth |
+|--------|-----------------------------|----------------------------------|------|
+| POST   | `/api/duels`                | Criação de duelo                 |JWT |
+| GET    | `/api/duels/{duelId}`       | Retorna estado do duelo          |JWT |
+| WS     | `/ws`                       | Conexão WebSocket STOMP          |JWT |
 
-spring:
-  application:
-    name: duel-service
-```
+**Tópicos WebSocket**
 
-For environment-specific overrides, create `application-local.yml` (already in `.gitignore`).
+| Tópico | Descrição |
+|--------|------------|
+| `/topic/duel/{duelId}` | Eventos de estado do duelo |
+| `/topic/duel/{duelId}/over` | Fim de duelo com vencedor |
+
+**Destinos de ação**
+
+| Destino | Descrição |
+|--------|------------|
+| `/app/duel.action` | Executar ação (SUMMON, ATTACK, SPELL, SET) |
+| `/app/duel.phase` | Avançar fase |
 
 ---
 
-## Roadmap
+## Fases do Duelo
 
-- [ ] JWT authentication on WebSocket handshake
-- [ ] Disconnect handling — notify opponent and pause duel
-- [ ] Redis migration for persistent duel state
-- [ ] Card database integration with `card-creator-service`
-- [ ] Duel history and result persistence
+```
+DRAW → STANDBY → MAIN_1 → BATTLE → MAIN_2 → END → (próximo turno)
+```
+
+| Fase | Ações permitidas |
+|---|---|
+| `MAIN_1`, `MAIN_2` | `SUMMON`, `SPELL`, `SET` |
+| `BATTLE` | `ATTACK` |
+| Outras | nenhuma |
+
+Validação de fase e processamento de ações são delegados ao `ocgcore`.
+
+---
+
+## Documentação Técnica
+
+| Documento                                         | Descrição                                    |
+|---------------------------------------------------|----------------------------------------------|
+| [Fluxos de Funcionalidades](./docs/system-feature-flows.md) | Fluxo interno de cada feature      |
+| [Backlog](./backlog.md)                           | Status de desenvolvimento do projeto         |
+
+---
+
+## Integração
+
+Este serviço integra com o ecossistema `yu-gi-oh-collections`:
+
+- **community-service** → cria duelos via `POST /api/duels` após matcher de jogadores
+- **auth-service** → validação JWT em conexões WebSocket
+- **Frontend (React)** → conecta via STOMP WebSocket para gameplay em tempo real
+
+---
+
+## Status do Projeto
+
+```
+[x] MVP — funcionalidades core implementadas
+[ ] v1.0 — autenticação JWT em WebSocket (em andamento)
+[ ] v1.1 — manipulação de desconexão
+[ ] v2.0 — migração para Redis (planejado)
+```
+
+---
+
+## Contribuindo
+
+1. Fork o repositório
+2. Crie uma branch: `git checkout -b feature/minha-feature`
+3. Commit suas mudanças: `git commit -m 'feat: adiciona minha feature'`
+4. Push: `git push origin feature/minha-feature`
+5. Abra um Pull Request descrevendo o que foi feito
+
+> Siga o padrão [Conventional Commits](https://www.conventionalcommits.org/pt-br/).
+
+---
+
+## Licença
+
+Distribuído sob a licença MIT. Veja [LICENSE](./LICENSE) para mais informações.
+
+---
+
+<p align="center">
+  Feito com foco em qualidade por <a href="https://github.com/odevpedro">@odevpedro</a>
+</p>
