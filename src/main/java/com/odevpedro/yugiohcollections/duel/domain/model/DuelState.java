@@ -20,11 +20,18 @@ public class DuelState {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    private String disconnectedPlayerId;
+    private LocalDateTime disconnectedAt;
+
     public Player getOpponent(String playerId) {
         return playerA.getPlayerId().equals(playerId) ? playerB : playerA;
     }
 
     public Player getActivePlayer() {
         return playerA.getPlayerId().equals(activePlayerId) ? playerA : playerB;
+    }
+
+    public boolean hasDisconnected() {
+        return disconnectedPlayerId != null;
     }
 }

@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+
 @Component
 @RequiredArgsConstructor
 public class DuelEventPublisher implements DuelEventPublisherPort {
@@ -16,6 +18,31 @@ public class DuelEventPublisher implements DuelEventPublisherPort {
     public void publishStateUpdate(String duelId, DuelState state) {
         messagingTemplate.convertAndSend("/topic/duel/" + duelId, state);
     }
+
+    @Override
+    public void publishGameOver(String duelId, String winnerId) {
+        messagingTemplate.convertAndSend("/topic/duel/" + duelId + "/over", winnerId);
+    }
+
+    @Override
+    public void publishPlayerDisconnected(String duelId, String disconnectedPlayerId, int timeoutSeconds) {
+        var payload = Map.of(
+                "type", "PLAYER_DISCONNECTED",
+                "disconnectedPlayerId", disconnectedPlayerId,
+                "timeoutSeconds", timeoutSeconds
+        );
+        messagingTemplate.convertAndSend("/topic/duel/" + duelId, payload);
+    }
+
+    @Override
+    public void publishPlayerReconnected(String duelId, String reconnectedPlayerId) {
+        var payload = Map.of(
+                "type", "PLAYER_RECONNECTED",
+                "reconnectedPlayerId", reconnectedPlayerId
+        );
+        messagingTemplate.convertAndSend("/topic/duel/" + duelId, payload);
+    }
+}
 
     @Override
     public void publishGameOver(String duelId, String winnerId) {
