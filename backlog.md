@@ -42,10 +42,7 @@ Nenhuma feature em andamento.
 
 > Ordenadas por prioridade. Itens de P0 e P1 devem entrar em "Em Andamento" primeiro.
 
-**Integrações**
-
-- `[ ]` Card database integration with card-creator-service — P2 — M
-- `[ ]` Duel history and result persistence — P2 — M
+Nenhuma feature pendente.
 
 ---
 
@@ -61,6 +58,8 @@ Nenhuma feature em andamento.
 - `[x]` Autenticação JWT em handshake WebSocket — 2026-04-28 — JwtChannelInterceptor, JwtProperties
 - `[x]` Disconnect handling com timeout de 3min — 2026-04-28 — SessionHandler, SessionManager
 - `[x]` Migração para Redis (persistent duel state) — 2026-04-28 — RedisDuelRepository
+- `[x]` Duel history and result persistence — 2026-04-28 — DuelHistoryEntity, DuelHistoryRepository
+- `[x]` Deck integration com deck-service via Feign — 2026-04-28 — DeckFeignClient
 
 ---
 
@@ -81,7 +80,7 @@ Nenhuma feature em andamento.
 > Pontos em aberto que precisam de decisão antes de serem desenvolvidos.
 
 - Decidir estratégia de persistência de estado: [x] Usar Redis
-- Definir formato de storage para histórico de duelos
+- Definir formato de storage para histórico de duelos: [x] PostgreSQL/H2 via JPA
 - [x] CONFIGURAR authentication WebSocket com auth-service
 
 ---
@@ -90,6 +89,8 @@ Nenhuma feature em andamento.
 
 | Versão | Data | Principais entregas |
 |--------|------|---------------------|
+| `0.0.6-SNAPSHOT` | 2026-04-28 | Deck integration via Feign |
+| `0.0.5-SNAPSHOT` | 2026-04-28 | Duel history and result persistence |
 | `0.0.4-SNAPSHOT` | 2026-04-28 | Migração para Redis (persistent state) |
 | `0.0.3-SNAPSHOT` | 2026-04-28 | Disconnect handling com timeout de 3min |
 | `0.0.2-SNAPSHOT` | 2026-04-28 | Autenticação JWT em WebSocket handshake |

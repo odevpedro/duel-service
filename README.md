@@ -118,8 +118,11 @@ O `OcgCoreLoader` extrai o binário do JAR em runtime e carrega via `System.load
 
 | Método | Rota                        | Descrição                        | Auth |
 |--------|-----------------------------|----------------------------------|------|
-| POST   | `/api/duels`                | Criação de duelo                 |JWT |
+| POST   | `/api/duels`                | Criação de duelo (com deckIds)  |JWT |
 | GET    | `/api/duels/{duelId}`       | Retorna estado do duelo          |JWT |
+| GET    | `/api/duels/history`        | Lista últimos 100 duelos         |JWT |
+| GET    | `/api/duels/history/{duelId}` | Detalhes de um duelo         |JWT |
+| GET    | `/api/duels/history/player/{playerId}` | Histórico de um jogador |JWT |
 | WS     | `/ws`                       | Conexão WebSocket STOMP          |JWT |
 
 **Tópicos WebSocket**
@@ -169,6 +172,7 @@ Este serviço integra com o ecossistema `yu-gi-oh-collections`:
 
 - **community-service** → cria duelos via `POST /api/duels` após matcher de jogadores
 - **auth-service** → validação JWT em conexões WebSocket
+- **deck-service** → carrega decks dos jogadores ao criar duelo
 - **Frontend (React)** → conecta via STOMP WebSocket para gameplay em tempo real
 
 ---
@@ -180,6 +184,8 @@ Este serviço integra com o ecossistema `yu-gi-oh-collections`:
 [x] v1.0 — autenticação JWT em WebSocket ✓
 [x] v1.1 — manipulação de desconexão (timeout 3min + WO) ✓
 [x] v2.0 — migração para Redis ✓
+[x] v3.0 — duel history persistence ✓
+[x] v3.1 — deck integration via Feign ✓
 ```
 
 ---
