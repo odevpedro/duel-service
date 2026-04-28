@@ -2,6 +2,7 @@ package com.odevpedro.yugiohcollections.duel.adapter.out.repository;
 
 import com.odevpedro.yugiohcollections.duel.domain.model.DuelState;
 import com.odevpedro.yugiohcollections.duel.domain.port.DuelRepositoryPort;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
 import java.util.Map;
@@ -9,6 +10,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Repository
+@Profile("dev")
 public class InMemoryDuelRepository implements DuelRepositoryPort {
 
     private final Map<String, DuelState> store = new ConcurrentHashMap<>();
