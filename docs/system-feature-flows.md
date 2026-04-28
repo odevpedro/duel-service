@@ -11,6 +11,9 @@
 - [Convenções deste Documento](#convenções-deste-documento)
 - [Feature: Criação de Duelo](#feature-criação-de-duelo)
 - [Feature: WebSocket/STOMP](#feature-websocketstomp)
+- [Feature: Autenticação JWT em WebSocket](#feature-autenticação-jwt-em-websocket)
+- [Feature: Disconnect Handling com Timeout](#feature-disconnect-handling-com-timeout)
+- [Feature: Persistência com Redis](#feature-persistência-com-redis)
 - [Feature: Sistema de Ações](#feature-sistema-de-ações)
 - [Feature: Gerenciamento de Fases](#feature-gerenciamento-de-fases)
 
@@ -610,3 +613,299 @@ O use case executa:
 |---------|-------------|----------------|----------|
 | Duelo finalizado | - | DUEL_ALREADY_OVER | Duelo já terminou |
 | Erro na transição | - | PHASE_TRANSITION_ERROR | Falha ao cambiar de fase |
+
+---
+
+# Feature: Autenticação JWT em WebSocket
+
+> **Versão:** 1.0.0
+> **Implementada em:** 2026-04-28
+> **Status:** Concluída
+
+---
+
+## Resumo
+
+Valida token JWT durante o handshake WebSocket STOMP. Garante que apenas usuários autenticados possam conectar aos tópicos de duelo.
+
+**Motivação:** Proteger endpoints WebSocket com a mesma autenticação usada na API REST.
+**Resultado:** Conexões WebSocket recusadas se JWT inválido ou ausente.
+
+---
+
+## Fluxo Principal
+
+### 1. Ponto de Entrada
+
+- **Tipo:** Handshake WebSocket STOMP
+- **Arquivo:** `src/main/java/com/odevpedro/yugiohcollections/duel/adapter/in/websocket/config/WebSocketConfig.java`
+- **Endpoint:** `/ws`
+- **Autenticação:** JWT via header `Authorization: Bearer <token>`
+
+**Conexão JavaScript:**
+
+```javascript
+const stompClient = new StompJs.Client({
+    webSocketFactory: () => new SockJS('/ws'),
+    connectHeaders: {
+        'Authorization': 'Bearer ' + jwtToken
+    }
+});
+```
+
+---
+
+### 2. Validação de Token
+
+- **Arquivo:** `src/main/java/com/odevpedro/yugiohcollections/duel/config/JwtChannelInterceptor.java`
+- **Biblioteca:** jjwt
+
+| Campo | Tipo | Obrigatório | Regra de validação |
+|-------|------|-------------|---------------------|
+| Authorization | String | Sim | Deve começar com "Bearer " + token válido |
+
+**Falha:** `IllegalArgumentException` Lanzada, conexão abortada.
+
+---
+
+### 3. Processamento
+
+O interceptor executa:
+
+1. Extrai header `Authorization`
+2. Valida formato "Bearer <token>"
+3. Parse JWT com chave secreta
+4. Extrai claims: userId, username, role
+5. Cria Principal customizado (StompPrincipal)
+6. Associa ao usuário da sessão STOMP
+
+---
+
+### 4. Regras de Negócio
+
+| Regra | Descrição | Localização no Código |
+|-------|-----------|----------------------|
+| Token obrigatório | Sem token = conexão negada | JwtChannelInterceptor:36 |
+| Token deve ser válido | JWT válido e não expirado | JwtChannelInterceptor:47 |
+| Claims extraídos | userId, username, role armazenados | JwtChannelInterceptor:48-51 |
+
+---
+
+### 5. Configuração
+
+**application.yml:**
+
+```yaml
+jwt:
+  secret: ${JWT_SECRET:mySecretKeyForJwtTokenGenerationThatIsLongEnough}
+  expirationMs: 3600000
+  refreshExpirationMs: 86400000
+  skip-blacklist-check: true
+```
+
+| Propriedade | Descrição | Padrão |
+|-------------|-----------|--------|
+| jwt.secret | Chave secreta para validar tokens | - |
+| jwt.expirationMs | Tempo de expiração do access token | 3600000 (1h) |
+| jwt.skip-blacklist-check | Pula validação de blacklist | true |
+
+---
+
+### 6. Resposta Final
+
+**Sucesso:**
+
+- Conexão STOMP estabelecida
+- Usuário autenticado disponível via `StompPrincipal`
+
+**Erro:**
+
+- 400 Bad Request com mensagem de erro
+- Conexão WebSocket fechada
+
+---
+
+## Classes Criadas
+
+| Classe | Arquivo | Descrição |
+|--------|---------|-----------|
+| JwtProperties | `config/JwtProperties.java` | Properties de configuração JWT |
+| JwtChannelInterceptor | `config/JwtChannelInterceptor.java` | Interceptor para validar token no handshake |
+| StompPrincipal | `config/StompPrincipal.java` | Principal customizado com dados do usuário |
+
+---
+
+## Integração com auth-service
+
+O duel-service usa a mesma chave secreta configurada no auth-service para validar tokens. O token gerado pelo auth-service contém:
+
+- `sub`: username
+- `userId`: UUID do usuário
+- `role`: role do usuário (ex: PLAYER, ADMIN)
+- `exp`: data de expiração
+
+---
+
+# Feature: Disconnect Handling com Timeout
+
+> **Versão:** 1.0.0
+> **Implementada em:** 2026-04-28
+> **Status:** Concluída
+
+---
+
+## Resumo
+
+Gerencia desconexão de jogadores durante um duelo. Se um jogador desconectar, o oponente recebe notificação e vence por WO (walkover) se não houver reconexão em 3 minutos.
+
+**Motivação:** Evitar abusode "pausar" o jogo desconnectando. Manter jogo justo.
+**Resultado:** Timeout de 3min, depois opponent vence por WO.
+
+---
+
+## Fluxo Principal
+
+### 1. Detecção de Disconnect
+
+- **Arquivo:** `src/main/java/com/odevpedro/yugiohcollections/duel/adapter/in/websocket/SessionHandler.java`
+- **Evento:** `SessionDisconnectEvent`
+
+Quando um jogador se desconecta:
+1. SessionHandler detecta via evento
+2. Busca duelId e playerId no SessionManager
+3. Atualiza DuelState com disconnectedPlayerId e timestamp
+
+---
+
+### 2. Notificação ao Oponente
+
+- **Arquivo:** `src/main/java/com/odevpedro/yugiohcollections/duel/adapter/out/messaging/DuelEventPublisher.java`
+
+Mensagem STOMP enviada para `/topic/duel/{duelId}`:
+
+```json
+{
+  "type": "PLAYER_DISCONNECTED",
+  "disconnectedPlayerId": "uuid-player-1",
+  "timeoutSeconds": 180
+}
+```
+
+---
+
+### 3. Timeout e WO
+
+Se o jogador não reconectar em 180 segundos:
+1. SessionHandler scheduling verifica o estado
+2. Define status do duelo como FINISHED
+3. Oponente vence por WO
+4. Publica evento em `/topic/duel/{duelId}/over` com winnerId
+
+---
+
+### 4. Reconexão
+
+- **Arquivo:** `src/main/java/com/odevpedro/yugiohcollections/duel/config/JwtChannelInterceptor.java`
+
+Quando um jogador com sessão ativa em um duelo se conecta novamente:
+1. JwtChannelInterceptor detecta subscribe
+2. Verifica se já havia sessão ativa para esse duelo
+3. Se sim, chama sessionHandler.handlePlayerReconnect()
+4. Remove status de disconnected do DuelState
+5. Publica evento PLAYER_RECONNECTED
+
+---
+
+## Configuração
+
+**application.yml:**
+
+```yaml
+# Timeout em segundos (padrão 180 = 3 minutos)
+duel:
+  disconnect-timeout-seconds: 180
+```
+
+---
+
+## Classes Envolvidas
+
+| Classe | Arquivo | Descrição |
+|--------|---------|-----------|
+| SessionManager | `adapter/in/websocket/SessionManager.java` | Mapeia sessionId → duelId, playerId |
+| SessionHandler | `adapter/in/websocket/SessionHandler.java` | Lida com connect/disconnect/reconnect |
+| DuelState | `domain/model/DuelState.java` | Campos disconnectedPlayerId, disconnectedAt |
+| DuelEventPublisher | `adapter/out/messaging/DuelEventPublisher.java` | Publica eventos de disconnect/reconnect |
+
+---
+
+## Regras de Negócio
+
+| Regra | Descrição |
+|-------|-----------|
+| Timeout fixo | 3 minutos (180s) para reconexão |
+| WO automático | Se timeout expirar, oponente vence |
+| Reconexão | Cancela processo de WO se jogador voltar |
+| Apenas in_progress | Só processa se duelo está IN_PROGRESS |
+
+---
+
+# Feature: Persistência com Redis
+
+> **Versão:** 1.0.0
+> **Implementada em:** 2026-04-28
+> **Status:** Concluída
+
+---
+
+## Resumo
+
+Persiste o estado dos duelos em Redis para garantir sobrevivência a reinicializações do serviço.
+
+**Motivação:** O estado em memória era perdido ao reiniciar o serviço.
+**Resultado:** Estado persiste em Redis com TTL de 24 horas.
+
+---
+
+## Configuração
+
+**application.yml:**
+
+```yaml
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+duel:
+  redis:
+    ttl-hours: 24
+```
+
+---
+
+## Arquitetura
+
+| Classe | Arquivo | Descrição |
+|--------|---------|-----------|
+| RedisDuelRepository | `adapter/out/repository/RedisDuelRepository.java` | Implementação com Redis |
+| InMemoryDuelRepository | `adapter/out/repository/InMemoryDuelRepository.java` | Mantido para perfil dev |
+| RedisConfig | `config/RedisConfig.java` | Configuração do StringRedisTemplate |
+
+---
+
+## Perfis
+
+| Perfil | Repository | Descrição |
+|--------|------------|-----------|
+| `dev` | InMemoryDuelRepository | Uso local sem Redis |
+| (default) | RedisDuelRepository | Produção com Redis |
+
+---
+
+## Formato de Storage
+
+- **Key:** `duel:{duelId}`
+- **Value:** JSON serializado do DuelState
+- **TTL:** 24 horas (configurável)

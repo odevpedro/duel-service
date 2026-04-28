@@ -7,6 +7,21 @@ spring:
   profiles:
     active: dev
 
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+jwt:
+  secret: ${JWT_SECRET:mySecretKeyForJwtTokenGenerationThatIsLongEnough}
+  expirationMs: 3600000
+  refreshExpirationMs: 86400000
+  skip-blacklist-check: true
+
+duel:
+  redis:
+    ttl-hours: 24
+
 logging:
   level:
     com.odevpedro.yugiohcollections.duel: DEBUG
