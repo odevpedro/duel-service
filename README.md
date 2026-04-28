@@ -177,9 +177,9 @@ Este serviço integra com o ecossistema `yu-gi-oh-collections`:
 
 ```
 [x] MVP — funcionalidades core implementadas
-[ ] v1.0 — autenticação JWT em WebSocket (em andamento)
-[ ] v1.1 — manipulação de desconexão
-[ ] v2.0 — migração para Redis (planejado)
+[x] v1.0 — autenticação JWT em WebSocket ✓
+[x] v1.1 — manipulação de desconexão (timeout 3min + WO) ✓
+[x] v2.0 — migração para Redis ✓
 ```
 
 ---

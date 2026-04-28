@@ -1,7 +1,7 @@
 # Backlog — duel-service
 
 > Registrovivo do progresso do projeto. Atualizado a cada mudança de estado de uma funcionalidade.
-> **Última atualização:** 2025-04-17
+> **Última atualização:** 2026-04-28
 
 ---
 
@@ -32,9 +32,9 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ## Em Andamento
 
-> Features atualmente sendo desenvolvidas.
+> Features atualmente sendo desenvolvidas. Idealmente, maximo de 2–3 itens simultaneos.
 
-- `[~]` Autenticação JWT em handshake WebSocket — P0 — L
+Nenhuma feature em andamento.
 
 ---
 
@@ -42,18 +42,10 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 > Ordenadas por prioridade. Itens de P0 e P1 devem entrar em "Em Andamento" primeiro.
 
-**Infraestrutura**
-
-- `[ ]` Migração para Redis (persistent duel state) — P1 — L
-
 **Integrações**
 
 - `[ ]` Card database integration with card-creator-service — P2 — M
 - `[ ]` Duel history and result persistence — P2 — M
-
-**Funcionalidades**
-
-- `[ ]` Disconnect handling — notificar oponente e pausar duelo — P1 — M
 
 ---
 
@@ -62,10 +54,13 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 > Features finalizadas com suas respectivas datas de conclusão e links de referência.
 
 - `[x]` Criação de duelos via REST API — 2025-01 — PR #1
-- `[x]` WebSocket STOMP para comunicação em tempo real — 2025-01 — PR #2
+- `[x]` WebSocket STOMP para komunicação em tempo real — 2025-01 — PR #2
 - `[x]` Integração com ocgcore via JNI — 2025-02 — PR #3
 - `[x]` Gerenciamento de fases do duelo — 2025-02 — PR #4
 - `[x]` Sistema de ações (SUMMON, ATTACK, SPELL, SET) — 2025-03 — PR #5
+- `[x]` Autenticação JWT em handshake WebSocket — 2026-04-28 — JwtChannelInterceptor, JwtProperties
+- `[x]` Disconnect handling com timeout de 3min — 2026-04-28 — SessionHandler, SessionManager
+- `[x]` Migração para Redis (persistent duel state) — 2026-04-28 — RedisDuelRepository
 
 ---
 
@@ -85,9 +80,9 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 > Pontos em aberto que precisam de decisão antes de serem desenvolvidos.
 
-- Decidir estratégia de persistência de estado: Redis vs PostgreSQL
+- Decidir estratégia de persistência de estado: [x] Usar Redis
 - Definir formato de storage para histórico de duelos
--_CONFIGURAR authentication WebSocket com auth-service
+- [x] CONFIGURAR authentication WebSocket com auth-service
 
 ---
 
@@ -95,4 +90,7 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 | Versão | Data | Principais entregas |
 |--------|------|---------------------|
+| `0.0.4-SNAPSHOT` | 2026-04-28 | Migração para Redis (persistent state) |
+| `0.0.3-SNAPSHOT` | 2026-04-28 | Disconnect handling com timeout de 3min |
+| `0.0.2-SNAPSHOT` | 2026-04-28 | Autenticação JWT em WebSocket handshake |
 | `0.0.1-SNAPSHOT` | 2025-04-17 | MVP com funcionalidades core |
