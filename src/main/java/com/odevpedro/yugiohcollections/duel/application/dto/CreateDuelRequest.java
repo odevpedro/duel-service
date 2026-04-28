@@ -11,4 +11,8 @@ public class CreateDuelRequest {
 
     @NotBlank
     private String playerBId;
+
+    private Long playerADeckId;
+
+    private Long playerBDeckId;
 }

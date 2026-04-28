@@ -11,6 +11,8 @@ import java.time.LocalDateTime;
 @Builder
 public class DuelState {
     private String duelId;
+    private String playerAId;
+    private String playerBId;
     private Phase currentPhase;
     private int turnNumber;
     private String activePlayerId;

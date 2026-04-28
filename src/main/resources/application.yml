@@ -7,6 +7,22 @@ spring:
   profiles:
     active: dev
 
+  datasource:
+    url: jdbc:h2:mem:dueldb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  h2:
+    console:
+      enabled: true
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -17,6 +33,9 @@ jwt:
   expirationMs: 3600000
   refreshExpirationMs: 86400000
   skip-blacklist-check: true
+
+deck-service:
+  url: ${DECK_SERVICE_URL:http://localhost:8082}
 
 duel:
   redis:

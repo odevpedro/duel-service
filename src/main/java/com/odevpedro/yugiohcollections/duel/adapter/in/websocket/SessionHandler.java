@@ -1,5 +1,7 @@
 package com.odevpedro.yugiohcollections.duel.adapter.in.websocket;
 
+import com.odevpedro.yugiohcollections.duel.adapter.out.persistence.repository.DuelHistoryRepository;
+import com.odevpedro.yugiohcollections.duel.application.mapper.DuelHistoryMapper;
 import com.odevpedro.yugiohcollections.duel.domain.model.DuelState;
 import com.odevpedro.yugiohcollections.duel.domain.model.enums.GameStatus;
 import com.odevpedro.yugiohcollections.duel.domain.port.DuelEventPublisherPort;
@@ -24,6 +26,8 @@ public class SessionHandler {
     private final DuelEventPublisherPort publisher;
     private final DuelRepositoryPort repository;
     private final SessionManager sessionManager;
+    private final DuelHistoryRepository historyRepository;
+    private final DuelHistoryMapper historyMapper;
 
     @EventListener
     public void handleConnect(SessionConnectedEvent event) {
@@ -103,6 +107,11 @@ public class SessionHandler {
             log.info("Player {} did not reconnect in time. Opponent {} wins by WO.", disconnectedPlayerId, opponentId);
 
             state.setStatus(GameStatus.FINISHED);
+            state.setUpdatedAt(LocalDateTime.now());
+            
+            var historyEntity = historyMapper.toEntity(state, opponentId);
+            historyRepository.save(historyEntity);
+            
             repository.save(state);
 
             publisher.publishGameOver(duelId, opponentId);
