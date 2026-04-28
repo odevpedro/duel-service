@@ -60,6 +60,7 @@ Nenhuma feature pendente.
 - `[x]` Migração para Redis (persistent duel state) — 2026-04-28 — RedisDuelRepository
 - `[x]` Duel history and result persistence — 2026-04-28 — DuelHistoryEntity, DuelHistoryRepository
 - `[x]` Deck integration com deck-service via Feign — 2026-04-28 — DeckFeignClient
+- `[x]` Testes unitários — 2026-04-28 — DuelHistoryMapperTest, SessionManagerTest, DuelControllerHistoryTest
 
 ---
 
