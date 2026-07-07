@@ -29,17 +29,19 @@ spring:
       port: ${REDIS_PORT:6379}
 
 jwt:
-  secret: ${JWT_SECRET:mySecretKeyForJwtTokenGenerationThatIsLongEnough}
+  secret: ${JWT_SECRET:yugioh-deck-management-super-secret-key-256bits-minimum}
   expirationMs: 3600000
   refreshExpirationMs: 86400000
   skip-blacklist-check: true
 
 deck-service:
-  url: ${DECK_SERVICE_URL:http://localhost:8082}
+  url: ${DECK_SERVICE_URL:http://localhost:8081}
 
 duel:
   redis:
     ttl-hours: 24
+  demo-deck:
+    enabled: true
 
 logging:
   level:

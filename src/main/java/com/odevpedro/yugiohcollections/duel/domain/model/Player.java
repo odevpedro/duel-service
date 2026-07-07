@@ -27,6 +27,24 @@ public class Player {
     @Builder.Default
     private List<Zone> spellTrapZones = new ArrayList<>();
 
+    public void setLifePoints(int lifePoints) {
+        this.lifePoints = Math.max(0, lifePoints);
+    }
+
+    public void takeDamage(int amount) {
+        if (amount < 0) {
+            throw new IllegalArgumentException("Damage amount cannot be negative");
+        }
+        setLifePoints(lifePoints - amount);
+    }
+
+    public void gainLife(int amount) {
+        if (amount < 0) {
+            throw new IllegalArgumentException("Life gain amount cannot be negative");
+        }
+        lifePoints += amount;
+    }
+
     public boolean isAlive() {
         return lifePoints > 0;
     }
