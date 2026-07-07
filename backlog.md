@@ -326,6 +326,121 @@ public record CardSummaryDTO(Long cardId, String name, String type,
 
 ---
 
+#### `[ ]` GAME-006A — Primeiro turno: jogador inicial nao compra
+
+**Descricao:** Regra oficial do Yu-Gi-Oh!: o jogador que comeca nao compra carta na DRAW Phase do primeiro turno.
+
+**Onde:** `DuelApplicationServiceImpl.createDuel()` e `SessionHandler.handlePlayerDisconnect()` (ou quem avanca fases)
+
+**Checklist:**
+- [ ] Adicionar flag `isFirstTurn` no `DuelState` (default true)
+- [ ] Apos criar duelo e distribuir mao, marcar `isFirstTurn = true`
+- [ ] Na primeira DRAW Phase, pular compra de carta
+- [ ] Quando o turno passar para o oponente (END → DRAW do outro), marcar `isFirstTurn = false`
+- [ ] Escrever teste: primeiro turno nao compra, segundo turno compra
+
+**Regra oficial:** `"O jogador que faz o primeiro turno não compra cards durante sua Fase de Compra."`
+
+**Estimativa:** S
+
+---
+
+#### `[ ]` GAME-006B — Incrementar turno e alternar jogador ativo ao fim do ciclo
+
+**Descricao:** Quando a fase avanca de END para DRAW, o `turnNumber` deve incrementar e o `activePlayerId` deve alternar para o outro jogador.
+
+**Onde:** `PhaseServiceImpl.advance()`, `OcgCoreStub.advancePhase()`
+
+**Checklist:**
+- [ ] No `OcgCoreStub.advancePhase()`, quando `currentPhase == END`:
+  - [ ] Nova fase deve ser DRAW do proximo jogador
+  - [ ] Incrementar `turnNumber`
+  - [ ] Alternar `activePlayerId`
+- [ ] Se usar ocgcore real, verificar se ele ja faz isso — se sim, garantir que o adaptador propague
+
+**Estimativa:** S
+
+---
+
+#### `[ ]` GAME-006C — LP nunca negativo (floor em 0)
+
+**Descricao:** Life Points podem ficar negativos em calculos intermediarios. O valor exibido e persistido deve ser no minimo 0.
+
+**Onde:** `Player` domain model
+
+**Checklist:**
+- [ ] Criar metodo `Player.takeDamage(int amount)` que faz `lifePoints = Math.max(0, lifePoints - amount)`
+- [ ] Criar metodo `Player.gainLife(int amount)` que faz `lifePoints += amount`
+- [ ] Remover atribuicoes diretas a `lifePoints` em todo o codigo
+- [ ] Usar `takeDamage()` no lugar de `setLifePoints()`
+
+**Estimativa:** XS
+
+---
+
+#### `[ ]` GAME-006D — Tratar empate (DRAW)
+
+**Descricao:** Quando ambos os jogadores perdem todos os LP simultaneamente (ex: ataque com dano maior que LP restante em ambos), o duelo deve terminar em empate.
+
+**Onde:** `ActionServiceImpl`, `OcgCorePort`
+
+**Checklist:**
+- [ ] Apos processar acao no `ActionServiceImpl.process()`, verificar se ambos os `Player.isAlive()` sao false
+- [ ] Se ambos mortos → `endDuel(duelId, null)` — winnerId = null
+- [ ] No `DuelHistoryMapper.toEntity()`, tratar `winnerId == null` como resultado "DRAW"
+- [ ] Publicar `publishGameOver(duelId, null)` — frontend mostra "EMPATE"
+
+**Estimativa:** S
+
+---
+
+#### `[ ]` GAME-006E — Side deck no modelo Player
+
+**Descricao:** O domain model `Player` nao possui `sideDeck`. Apos o duelo, em formato match (melhor de 3), jogadores podem trocar cartas do side deck.
+
+**Onde:** `Player.java`, `DuelApplicationServiceImpl.loadDeckFromService()`, `DeckFeignClient`
+
+**Checklist:**
+- [ ] Adicionar `@Builder.Default private List<Card> sideDeck = new ArrayList<>();` no `Player`
+- [ ] No `DeckFeignClient`, adicionar metodo `getDeckCardsInZone(deckId, zone)` ou carregar todas as zonas
+- [ ] No `loadDeckFromService()`, carregar tambem as cartas do side deck
+- [ ] Validar side deck (max 15 cartas)
+- [ ] Atualizar `DuelResponse` para incluir tamanho do side deck de cada jogador (informacional)
+
+**Estimativa:** M
+
+---
+
+#### `[ ]` GAME-006F — Zona de banimento no Player
+
+**Descricao:** O domain model `Player` nao tem zona de banimento. Cartas banidas por efeitos nao tem onde ficar.
+
+**Onde:** `Player.java`
+
+**Checklist:**
+- [ ] Adicionar `@Builder.Default private List<Card> banished = new ArrayList<>();` no `Player`
+- [ ] Incluir no estado do duelo para ser renderizado no frontend
+
+**Estimativa:** XS
+
+---
+
+#### `[ ]` GAME-006G — Extra deck no Player
+
+**Descricao:** O domain model `Player` nao tem `extraDeck`. Monstros do Extra Deck (Fusao, Sincronia, XYZ, Link) nao sao carregados.
+
+**Onde:** `Player.java`, `DeckFeignClient`
+
+**Checklist:**
+- [ ] Adicionar `@Builder.Default private List<Card> extraDeck = new ArrayList<>();` no `Player`
+- [ ] Carregar cartas do Extra Deck via `DeckFeignClient`
+- [ ] Validar extra deck (max 15 cartas)
+- [ ] Incluir no estado do duelo
+
+**Estimativa:** S
+
+---
+
 #### `[ ]` GAME-006 — Popular duelType no historico
 
 **Descricao:** `DuelHistoryMapper.toEntity()` nunca popula o campo `duelType`. Deve ser populado com informacao do tipo de duelo (ex: "RANKED", "CASUAL", "FRIENDLY").
@@ -425,7 +540,104 @@ public record CardSummaryDTO(Long cardId, String name, String type,
 
 ---
 
-### FASE 3 — Qualidade, Testes e Documentacao
+### FASE 3A — Seguranca e Confiabilidade
+
+---
+
+#### `[ ]` SEC-001 — Validar dono da acao no WebSocket
+
+**Descricao:** O WebSocket nao verifica se o `playerId` na acao corresponde ao usuario autenticado. Um jogador malicioso pode enviar acoes como se fosse o oponente.
+
+**Onde:** `DuelActionHandler.handleAction()`, `ActionServiceImpl.process()`
+
+**Checklist:**
+- [ ] Em `handleAction()`, comparar `principal.getName()` com o `playerId` esperado
+- [ ] So permitir acao se o `activePlayerId` do estado for igual ao `principal.getName()`
+- [ ] Extra: verificar se o `playerId` da acao (actionDTO) corresponde ao `principal.getName()` do token
+- [ ] Retornar erro padrao: `"Nao e seu turno"` ou `"Acao nao autorizada"`
+
+**Criterio de aceitacao:** Tentativa de agir como outro jogador ou fora do turno retorna erro 403.
+
+**Estimativa:** M
+
+---
+
+#### `[ ]` SEC-002 — Rate limiting nas acoes
+
+**Descricao:** Sem limite de requisicoes, um jogador pode enviar centenas de acoes por segundo, sobrecarregando o servidor e o ocgcore.
+
+**Checklist:**
+- [ ] Implementar rate limiter por `playerId` no `DuelActionHandler`:
+  - Maximo de 10 acoes por segundo por jogador
+  - Usar `TokenBucket` ou `RateLimiter` do Guava (ou implementacao simples com `ConcurrentHashMap` + timestamps)
+  - Se excedido, retornar erro `"Muitas acoes. Aguarde."` e ignorar a acao
+- [ ] Configurar limite via `application.yml`: `duel.rate-limit.actions-per-second: 10`
+
+**Estimativa:** S
+
+---
+
+#### `[ ]` SEC-003 — Configurar CORS no duel-service
+
+**Descricao:** Sem CORS configurado, o frontend em `localhost:5173` (Vite) nao consegue chamar os endpoints REST.
+
+**Onde:** `SecurityConfig` ou `WebSocketConfig`
+
+**Checklist:**
+- [ ] Adicionar config CORS global no `SecurityConfig` ou novo `@Bean WebMvcConfigurer`:
+  ```java
+  @Bean
+  public WebMvcConfigurer corsConfigurer() {
+      return new WebMvcConfigurer() {
+          @Override
+          public void addCorsMappings(CorsRegistry registry) {
+              registry.addMapping("/**")
+                      .allowedOrigins("http://localhost:5173", "http://localhost:3000")
+                      .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                      .allowedHeaders("*")
+                      .allowCredentials(true);
+          }
+      };
+  }
+  ```
+
+**Criterio de aceitacao:** Frontend Vite consegue chamar `POST /api/duels` sem erro CORS.
+
+**Estimativa:** S
+
+---
+
+#### `[ ]` SEC-004 — Redis: fallback se conexao falhar
+
+**Descricao:** Se o Redis estiver indisponivel, `RedisDuelRepository` lanca excecao sem fallback. Deveria tentar InMemory como fallback.
+
+**Onde:** `RedisDuelRepository`
+
+**Checklist:**
+- [ ] Envolver operacoes `save()` / `findById()` em try-catch
+- [ ] Se Redis falhar, logar warning e usar `ConcurrentHashMap` local como fallback
+- [ ] Opcao 2 (mais limpa): injetar `DuelRepositoryPort` condicional via `@Profile("redis")` e `@Profile("!redis")`
+
+**Estimativa:** M
+
+---
+
+#### `[ ]` SEC-005 — Endpoint de resync de estado
+
+**Descricao:** Se a conexao WebSocket cair e reconectar, o cliente precisa receber o estado atual completo. Atualmente so recebe o estado ao subscrever, mas se perder a mensagem, fica sem sincronia.
+
+**Onde:** Novo endpoint REST ou mensagem STOMP dedicada
+
+**Checklist:**
+- [ ] Criar endpoint `GET /api/duels/{duelId}/state` que retorna `DuelState` completo
+- [ ] No frontend, ao reconectar, chamar este endpoint antes de subscrever
+- [ ] Opcional: enviar versao incremental (incrementar a cada alteracao) para detectar divergencia
+
+**Estimativa:** M
+
+---
+
+### FASE 3B — Qualidade, Testes e Documentacao
 
 ---
 
@@ -530,6 +742,131 @@ public record CardSummaryDTO(Long cardId, String name, String type,
 
 ---
 
+---
+
+### FASE 3C — Infraestrutura e Observabilidade
+
+---
+
+#### `[ ]` INFRA-005 — Health endpoint
+
+**Checklist:**
+- [ ] Adicionar `spring-boot-starter-actuator`
+- [ ] Expor `/actuator/health` como unica excecao no `SecurityConfig`
+- [ ] Configurar liveness/readiness probes (importante para Kubernetes)
+
+**Estimativa:** XS
+
+---
+
+#### `[ ]` INFRA-006 — STOMP heartbeats
+
+**Descricao:** Sem heartbeat configurado, conexoes WebSocket ociosas ficam abertas para sempre.
+
+**Onde:** `WebSocketConfig`
+
+**Checklist:**
+- [ ] No `configureMessageBroker()`, configurar heartbeat:
+  ```java
+  registry.enableSimpleBroker("/topic")
+         .setHeartbeatValue(new long[]{10000, 10000}); // client, server (ms)
+  ```
+- [ ] No frontend, configurar heartbeat no `Client` do STOMP
+
+**Estimativa:** XS
+
+---
+
+#### `[ ]` INFRA-007 — Graceful shutdown
+
+**Descricao:** Ao parar o servico, as conexoes WebSocket ativas sao dropadas sem aviso.
+
+**Onde:** `application.yml` ou bean `SmartLifecycle`
+
+**Checklist:**
+- [ ] Em `application.yml`: `server.shutdown: graceful`
+- [ ] Opcional: listener `ContextClosedEvent` que notifica jogadores em duelo ativo antes de desligar
+
+**Estimativa:** S
+
+---
+
+#### `[ ]` INFRA-008 — Correlation ID nos logs
+
+**Descricao:** Sem um ID de correlacao, e impossivel rastrear uma requisicao do frontend ate o ocgcore.
+
+**Checklist:**
+- [ ] Adicionar filtro MDC que injeta `X-Correlation-Id` do header HTTP ou gera um UUID
+- [ ] Configurar `logging.pattern.level` para incluir `%X{correlationId}`
+- [ ] Propagar o correlationId para chamadas Feign via `RequestInterceptor`
+
+**Estimativa:** S
+
+---
+
+#### `[ ]` INFRA-009 — OcgCore nativo com fallback para Stub
+
+**Descricao:** Em producao, se o ocgcore nativo falhar ao carregar, o servico quebra. Deveria cair para o `OcgCoreStub` como fallback.
+
+**Onde:** `OcgCoreLoader`, `OcgCoreConfig`
+
+**Checklist:**
+- [ ] Se `System.load()` falhar no `OcgCoreLoader`, logar erro e usar `OcgCoreStub`
+- [ ] Opcao: criar `@ConditionalOnClass` ou `@ConditionalOnMissingBean` para resolver
+
+**Estimativa:** S
+
+---
+
+### FASE 3D — Dados e Persistencia
+
+---
+
+#### `[ ]` DATA-001 — Salvar deckIds no historico
+
+**Descricao:** `DuelHistoryEntity` nao armazena os `deckId`s usados no duelo. Isso impede de reconstruir o contexto do duelo depois.
+
+**Onde:** `DuelHistoryEntity`, `DuelHistoryMapper`
+
+**Checklist:**
+- [ ] Adicionar colunas `player_a_deck_id` e `player_b_deck_id` (Long)
+- [ ] No `DuelHistoryMapper.toEntity()`, preencher os campos
+- [ ] Atualizar `V1__init_schema.sql`
+
+**Estimativa:** XS
+
+---
+
+#### `[ ]` DATA-002 — Salvar tipo de vitoria (normal/WO/disconnect)
+
+**Descricao:** O historico nao diferencia entre vitoria normal, WO por desconexao, ou conceder.
+
+**Onde:** `DuelHistoryEntity`, `DuelApplicationServiceImpl`, `SessionHandler`
+
+**Checklist:**
+- [ ] Adicionar coluna `win_type` (String): `"NORMAL"`, `"WO"`, `"SURRENDER"`, `"DRAW"`
+- [ ] Em `endDuel()`, aceitar parametro `winType`
+- [ ] Em `SessionHandler.handleDisconnectTimeoutAsync()`, passar `"WO"`
+
+**Estimativa:** XS
+
+---
+
+#### `[ ]` DATA-003 — Incluir imageUrl das cartas no estado do duelo
+
+**Descricao:** O frontend precisa da URL da imagem de cada carta. Sem ela, o frontend precisa fazer N chamadas ao card-service.
+
+**Onde:** `Card.java`, `DuelApplicationServiceImpl.loadDeckFromService()`
+
+**Checklist:**
+- [ ] Adicionar `private String imageUrl;` no `Card.java`
+- [ ] Ao carregar cartas do deck-service, buscar `imageUrl` do card-service via Feign batch
+- [ ] Incluir `imageUrl` no `DuelState` que e enviado ao frontend via WebSocket
+
+**Estimativa:** S
+
+---
+
 ## Diagrama de Fluxo do Duelo
 
 ```
@@ -610,6 +947,9 @@ USUARIO                            FRONTEND                          DUEL-SERVIC
 | BUG-005 | V1__init_schema.sql vazio | Critica | 2026-07-07 |
 | BUG-006 | Endpoints REST /api/duels/** sem autenticacao JWT | Alta | 2026-07-07 |
 | BUG-007 | deck-service.url no application.yml aponta para porta 8082 — deck-service real roda na 8081 | Media | 2026-07-07 |
+| BUG-008 | Card.java nao tem imageUrl — frontend nao consegue exibir arte da carta sem buscar separadamente | Media | 2026-07-07 |
+| BUG-009 | StompPrincipal nao implementa equals/hashCode — pode causar problemas em collections do Spring Security | Baixa | 2026-07-07 |
+| BUG-010 | LP pode ficar negativo — Player.lifePoints nao tem protecao contra valores abaixo de 0 | Media | 2026-07-07 |
 
 ---
 
@@ -621,6 +961,9 @@ USUARIO                            FRONTEND                          DUEL-SERVIC
 - [ ] Decidir se ocgcore sera substituido por engine em Java puro ou mantido via JNI
 - [ ] Decidir versao do spring-cloud BOM no build.gradle
 - [ ] Corrigir `deck-service.url` no `application.yml` de `8082` para `8081` (ver BUG-007)
+- [ ] Definir se side deck sera suportado na primeira versao ou apenas em matches (melhor de 3)
+- [ ] Definir taxa de rate limiting (10 acoes/s parece razoavel)
+- [ ] Decidir sobre heartbeat WebSocket: necessario para evitar acumulo de conexoes ociosas
 
 ---
 
