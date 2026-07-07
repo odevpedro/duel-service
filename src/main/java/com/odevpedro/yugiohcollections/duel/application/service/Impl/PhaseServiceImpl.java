@@ -3,19 +3,25 @@ package com.odevpedro.yugiohcollections.duel.application.service.Impl;
 import com.odevpedro.yugiohcollections.duel.application.service.PhaseService;
 import com.odevpedro.yugiohcollections.duel.domain.model.DuelState;
 import com.odevpedro.yugiohcollections.duel.domain.model.enums.Phase;
+import com.odevpedro.yugiohcollections.duel.domain.port.DuelRepositoryPort;
 import com.odevpedro.yugiohcollections.duel.domain.port.OcgCorePort;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
 public class PhaseServiceImpl implements PhaseService {
 
     private final OcgCorePort ocgCore;
+    private final DuelRepositoryPort repository;
 
     @Override
     public DuelState advance(DuelState state) {
-        return ocgCore.advancePhase(state);
+        DuelState updated = ocgCore.advancePhase(state);
+        updated.setUpdatedAt(LocalDateTime.now());
+        return repository.save(updated);
     }
 
     @Override

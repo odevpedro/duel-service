@@ -7,6 +7,7 @@ import com.odevpedro.yugiohcollections.duel.application.mapper.DuelHistoryMapper
 import com.odevpedro.yugiohcollections.duel.application.mapper.DuelMapper;
 import com.odevpedro.yugiohcollections.duel.application.service.DuelApplicationService;
 import com.odevpedro.yugiohcollections.duel.adapter.out.persistence.repository.DuelHistoryRepository;
+import com.odevpedro.yugiohcollections.duel.domain.model.DuelState;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -33,6 +34,11 @@ public class DuelController {
     @GetMapping("/{duelId}")
     public ResponseEntity<DuelResponse> getDuel(@PathVariable String duelId) {
         return ResponseEntity.ok(mapper.toResponse(duelService.findById(duelId)));
+    }
+
+    @GetMapping("/{duelId}/state")
+    public ResponseEntity<DuelState> getDuelState(@PathVariable String duelId) {
+        return ResponseEntity.ok(duelService.findById(duelId));
     }
 
     @GetMapping("/{duelId}/history")

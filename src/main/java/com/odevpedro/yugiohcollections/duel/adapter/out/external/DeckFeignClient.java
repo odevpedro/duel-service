@@ -4,15 +4,11 @@ import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
-import java.util.List;
 import java.util.Map;
 
-@FeignClient(name = "deck-service", url = "${deck-service.url:http://localhost:8082}")
+@FeignClient(name = "deck-service", url = "${deck-service.url:http://localhost:8081}")
 public interface DeckFeignClient {
 
-    @GetMapping("/api/decks/{deckId}/cards")
-    List<Map<String, Object>> getDeckCards(@PathVariable Long deckId);
-    
-    @GetMapping("/api/decks/{deckId}")
+    @GetMapping("/decks/{deckId}/full")
     Map<String, Object> getDeck(@PathVariable Long deckId);
 }

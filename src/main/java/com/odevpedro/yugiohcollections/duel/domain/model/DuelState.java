@@ -19,8 +19,10 @@ public class DuelState {
     private Player playerA;
     private Player playerB;
     private GameStatus status;
+    private String winnerId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private boolean firstTurn;
 
     private String disconnectedPlayerId;
     private LocalDateTime disconnectedAt;

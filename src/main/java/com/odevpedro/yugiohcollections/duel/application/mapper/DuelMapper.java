@@ -14,6 +14,7 @@ public class DuelMapper {
                 .playerBId(state.getPlayerB().getPlayerId())
                 .currentPhase(state.getCurrentPhase())
                 .status(state.getStatus())
+                .winnerId(state.getWinnerId())
                 .turnNumber(state.getTurnNumber())
                 .activePlayerId(state.getActivePlayerId())
                 .build();

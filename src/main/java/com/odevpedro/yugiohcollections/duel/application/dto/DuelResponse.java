@@ -13,6 +13,7 @@ public class DuelResponse {
     private String playerBId;
     private Phase currentPhase;
     private GameStatus status;
+    private String winnerId;
     private int turnNumber;
     private String activePlayerId;
 }

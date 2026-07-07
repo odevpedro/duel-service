@@ -6,6 +6,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
@@ -27,7 +28,7 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
 
     public JwtChannelInterceptor(JwtProperties jwtProperties, 
                                   SessionManager sessionManager,
-                                  SessionHandler sessionHandler) {
+                                  @Lazy SessionHandler sessionHandler) {
         this.jwtProperties = jwtProperties;
         this.sessionManager = sessionManager;
         this.sessionHandler = sessionHandler;

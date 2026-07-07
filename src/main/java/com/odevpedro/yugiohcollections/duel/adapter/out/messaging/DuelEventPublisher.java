@@ -21,7 +21,10 @@ public class DuelEventPublisher implements DuelEventPublisherPort {
 
     @Override
     public void publishGameOver(String duelId, String winnerId) {
-        messagingTemplate.convertAndSend("/topic/duel/" + duelId + "/over", winnerId);
+        messagingTemplate.convertAndSend("/topic/duel/" + duelId + "/over", Map.of(
+                "type", "GAME_OVER",
+                "winnerId", winnerId
+        ));
     }
 
     @Override
@@ -41,11 +44,5 @@ public class DuelEventPublisher implements DuelEventPublisherPort {
                 "reconnectedPlayerId", reconnectedPlayerId
         );
         messagingTemplate.convertAndSend("/topic/duel/" + duelId, payload);
-    }
-}
-
-    @Override
-    public void publishGameOver(String duelId, String winnerId) {
-        messagingTemplate.convertAndSend("/topic/duel/" + duelId + "/over", winnerId);
     }
 }
