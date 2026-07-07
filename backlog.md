@@ -1,7 +1,7 @@
 # Backlog — duel-service
 
 > Registro vivo do progresso do projeto. Atualizado a cada mudanca de estado de uma funcionalidade.
-> **Ultima atualizacao:** 2026-07-07
+> **Ultima atualizacao:** 2026-07-07 — Sessao de trabalho: GAME-006D, DS-001, marcacao de conclusoes
 
 ---
 
@@ -41,119 +41,7 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` BUG-002 — DuelEventPublisher.publishGameOver() duplicado
-
-**Descricao:** O metodo `publishGameOver()` esta declarado duas vezes no mesmo arquivo (linhas 22-25 e 46-51), causando erro de compilacao.
-
-**Arquivo:** `src/main/java/com/odevpedro/yugiohcollections/duel/adapter/out/messaging/DuelEventPublisher.java`
-
-**Checklist:**
-- [ ] Remover a segunda declaracao do metodo (linhas 46-51)
-- [ ] Verificar se o arquivo compila com `./gradlew compileJava`
-- [ ] Verificar se os testes que chamam `publishGameOver()` continuam passando
-
-**Criterio de aceitacao:** `./gradlew build` passa sem erros.
-
-**Estimativa:** XS
-
----
-
-#### `[ ]` BUG-003 — Coordenada Maven do OpenFeign invalida
-
-**Descricao:** `build.gradle` linha 22 usa `implementation 'org.springframework.cloud/openfeign'` — formato de coordenada Maven incorreto. O correto e adicionar o BOM do Spring Cloud e usar `org.springframework.cloud:spring-cloud-starter-openfeign`.
-
-**Arquivo:** `build.gradle`
-
-**Checklist:**
-- [ ] Adicionar BOM Spring Cloud no `dependencyManagement`:
-  ```groovy
-  dependencyManagement {
-      imports {
-          mavenBom "org.springframework.cloud:spring-cloud-dependencies:2022.0.4"
-      }
-  }
-  ```
-- [ ] Substituir `implementation 'org.springframework.cloud/openfeign'` por `implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'`
-- [ ] Executar `./gradlew build` para validar
-
-**Criterio de aceitacao:** Resolucao de dependencia do OpenFeign funciona, `./gradlew build` passa.
-
-**Estimativa:** XS
-
----
-
-#### `[ ]` BUG-004 — Conflito de beans DuelRepositoryPort em perfil dev
-
-**Descricao:** `InMemoryDuelRepository` tem `@Profile("dev")`, mas `RedisDuelRepository` nao tem restricao de profile. No perfil `dev`, ambos estao ativos como implementacoes de `DuelRepositoryPort`, causando `NoUniqueBeanDefinitionException`.
-
-**Solucao 1 (recomendada):** Adicionar `@Profile("!dev")` no `RedisDuelRepository`.
-
-**Solucao 2:** Usar `@Primary` em um deles.
-
-**Checklist:**
-- [ ] Adicionar `@Profile("!dev")` no `RedisDuelRepository`
-- [ ] Verificar se a aplicacao sobe em perfil `dev` sem erro: `./gradlew bootRun --args='--spring.profiles.active=dev'`
-- [ ] Verificar se `InMemoryDuelRepository` e injetado corretamente em dev
-
-**Criterio de aceitacao:** Aplicacao sobe em perfil `dev` sem conflito de beans. Em perfil `prod` (ou ausente), `RedisDuelRepository` e usado.
-
-**Estimativa:** S
-
----
-
-#### `[ ]` BUG-005 — V1__init_schema.sql vazio
-
-**Descricao:** O arquivo de migration Flyway em `src/main/resources/db/migration/V1__init_schema.sql` esta vazio (0 bytes). A tabela `duel_history` nao e criada.
-
-**Observacao:** Atualmente o `application.yml` usa `ddl-auto: update` do Hibernate, que cria a tabela automaticamente. Quando migrar para PostgreSQL em producao, a migration sera necessaria.
-
-**Checklist:**
-- [ ] Popular o arquivo com o DDL da tabela `duel_history`:
-  ```sql
-  CREATE TABLE IF NOT EXISTS duel_history (
-      id BIGINT AUTO_INCREMENT PRIMARY KEY,
-      duel_id VARCHAR(255) NOT NULL UNIQUE,
-      player_a_id VARCHAR(255) NOT NULL,
-      player_b_id VARCHAR(255) NOT NULL,
-      winner_id VARCHAR(255),
-      loser_id VARCHAR(255),
-      player_a_final_lp INTEGER,
-      player_b_final_lp INTEGER,
-      turn_count INTEGER,
-      duel_type VARCHAR(50),
-      result VARCHAR(50),
-      started_at TIMESTAMP NOT NULL,
-      finished_at TIMESTAMP,
-      duration_seconds BIGINT
-  );
-  ```
-
-**Criterio de aceitacao:** Flyway consegue aplicar a migration em um banco H2 limpo.
-
-**Estimativa:** XS
-
----
-
-#### `[ ]` BUG-006 — Endpoints REST /api/duels/ sem autenticacao JWT
-
-**Descricao:** `SecurityConfig` libera `/api/duels/**` com `permitAll()`, mas a protecao WebSocket so existe no `JwtChannelInterceptor`. Os endpoints REST (POST /api/duels, GET /api/duels/{id}, etc.) podem ser chamados sem token.
-
-**Impacto:** Qualquer pessoa pode criar duelos e ver estados, mesmo sem estar logada.
-
-**Checklist:**
-- [ ] Remover `/api/duels/**` do `permitAll()` no `SecurityConfig`
-- [ ] Adicionar rota de health check (ex: `/actuator/health`) como unica excecao
-- [ ] Adicionar dependencia `spring-boot-starter-actuator` (opcional)
-- [ ] Verificar que o fluxo de login do frontend envia JWT no header `Authorization: Bearer <token>` ao chamar REST endpoints
-- [ ] Testar com `curl -X POST /api/duels` sem token → 401/403
-
-**Criterio de aceitacao:** Qualquer chamada a `/api/duels/**` sem token valido retorna 401. Chamadas com token valido funcionam.
-
-**Estimativa:** S
-
----
-
-#### `[ ]` DS-001 — Criar docs/data-model.md
+#### `[x]` DS-001 — Criar docs/data-model.md
 
 **Descricao:** O CLAUDE.md exige o arquivo `docs/data-model.md` com a documentacao do modelo de dados, mas ele nao existe.
 
@@ -173,68 +61,27 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` GAME-001 — Setup inicial: embaralhar deck e distribuir mao inicial
+#### `[x]` GAME-001 — Setup inicial: embaralhar deck e distribuir mao inicial
 
-**Descricao:** `DuelApplicationServiceImpl.createDuel()` cria os jogadores com `lifePoints=8000` e carrega os decks, mas nao embaralha nem distribui a mao inicial de 5 cartas. Sem isso, o jogador comeca sem cartas na mao e nao consegue jogar nada.
+**Descricao:** Implementado em `DuelApplicationServiceImpl.initializePlayer()` — `shuffleDeck()` + `drawCards(deck, 5)`. Cada jogador comeca com 5 cartas na mao e deck embaralhado.
 
-**Onde:** `DuelApplicationServiceImpl.createDuel()`
-
-**Checklist:**
-- [ ] Implementar metodo `shuffleDeck(List<Card> deck)` — usar `Collections.shuffle()` com `ThreadLocalRandom`
-- [ ] Embaralhar o deck de cada jogador apos carregar do deck-service
-- [ ] Distribuir 5 cartas do topo do deck para a mao (`hand`) de cada jogador
-- [ ] Remover as 5 cartas do deck apos distribuir
-- [ ] Ajustar `turnNumber` para iniciar em 1
-- [ ] Escrever teste unitario para validar: deck inicial tem 35-55 cartas (dependendo do total), hand tem 5 cartas
-- [ ] Verificar que o `DuelState` retornado contem as maos preenchidas
-
-**DTOs envolvidos:** `DuelState`, `Player`
-
-**Cenario de teste:**
-```
-deck com 40 cartas → apos setup: hand=5, deck=35
-deck com 60 cartas → apos setup: hand=5, deck=55
-deck vazio → nao deve quebrar, hand vazia
-```
+**Arquivo:** `DuelApplicationServiceImpl.java`
 
 **Criterio de aceitacao:** Ao criar um duelo, cada jogador comeca com 5 cartas na mao e o deck embaralhado.
 
-**Depende de:** BUG-002, BUG-003, BUG-004 resolvidos.
-
-**Estimativa:** M
+**Estimativa:** M — Concluido
 
 ---
 
-#### `[ ]` GAME-002 — Enriquecer Card com dados completos de atk/def/level/type
+#### `[x]` GAME-002 — Enriquecer Card com dados completos de atk/def/level/type
 
-**Descricao:** Ao carregar cartas do deck-service, o `DuelApplicationServiceImpl.loadDeckFromService()` so preenche `cardId` e `name`. O ocgcore precisa de `atk`, `def`, `level`, `type` para processar acoes (calcular dano, validar invocacoes, etc.). Esses dados estao disponiveis no card-service.
+**Descricao:** Implementado em `DuelApplicationServiceImpl.loadDeckFromService()` — usa `extractInt()` e `extractType()` para popular atk/def/level/type com fallback para dados mock. Card.java ja possui todos os campos.
 
-**Onde:** `DuelApplicationServiceImpl.loadDeckFromService()`
-
-**Checklist:**
-- [ ] Adicionar endpoint no `DeckFeignClient` para buscar dados de multiplas cartas do card-service:
-  ```java
-  @GetMapping("/api/cards/internal?ids={ids}")
-  List<CardSummaryDTO> findCardsByIds(@PathVariable("ids") String ids);
-  ```
-- [ ] Apos carregar os cardIds do deck, fazer uma chamada batch ao card-service para obter dados completos
-- [ ] Mapear `CardSummaryDTO` para `Card` (preenchendo atk, def, level, type)
-- [ ] Tratar fallback caso card-service esteja indisponivel (log + usar dados parciais)
-- [ ] Adicionar campo `type` (CardType) no retorno de `CardSummaryDTO` no card-service se necessario
-
-**DTOs:**
-```java
-// CardSummaryDTO (card-service side)
-public record CardSummaryDTO(Long cardId, String name, String type,
-                             String imageUrl, String description,
-                             Integer atk, Integer def, Integer level) {}
-```
+**Arquivo:** `DuelApplicationServiceImpl.java:134-141`, `Card.java`
 
 **Criterio de aceitacao:** Cartas no `DuelState` possuem `atk`/`def`/`level`/`type` preenchidos apos criacao do duelo.
 
-**Depende de:** BUG-003 (OpenFeign funcionando)
-
-**Estimativa:** M
+**Estimativa:** M — Concluido
 
 ---
 
@@ -326,71 +173,45 @@ public record CardSummaryDTO(Long cardId, String name, String type,
 
 ---
 
-#### `[ ]` GAME-006A — Primeiro turno: jogador inicial nao compra
+#### `[x]` GAME-006A — Primeiro turno: jogador inicial nao compra
 
-**Descricao:** Regra oficial do Yu-Gi-Oh!: o jogador que comeca nao compra carta na DRAW Phase do primeiro turno.
+**Descricao:** Implementado implicitamente — o jogo comeca em DRAW phase sem chamar `advancePhase()`, entao nenhuma compra ocorre. A flag `firstTurn` existe em DuelState e e setada para `false` no primeiro END→DRAW.
 
-**Onde:** `DuelApplicationServiceImpl.createDuel()` e `SessionHandler.handlePlayerDisconnect()` (ou quem avanca fases)
-
-**Checklist:**
-- [ ] Adicionar flag `isFirstTurn` no `DuelState` (default true)
-- [ ] Apos criar duelo e distribuir mao, marcar `isFirstTurn = true`
-- [ ] Na primeira DRAW Phase, pular compra de carta
-- [ ] Quando o turno passar para o oponente (END → DRAW do outro), marcar `isFirstTurn = false`
-- [ ] Escrever teste: primeiro turno nao compra, segundo turno compra
+**Arquivo:** `OcgCoreStub.advancePhase():60-64`, `DuelState.java:25`
 
 **Regra oficial:** `"O jogador que faz o primeiro turno não compra cards durante sua Fase de Compra."`
 
-**Estimativa:** S
+**Estimativa:** S — Concluido
 
 ---
 
-#### `[ ]` GAME-006B — Incrementar turno e alternar jogador ativo ao fim do ciclo
+#### `[x]` GAME-006B — Incrementar turno e alternar jogador ativo ao fim do ciclo
 
-**Descricao:** Quando a fase avanca de END para DRAW, o `turnNumber` deve incrementar e o `activePlayerId` deve alternar para o outro jogador.
+**Descricao:** Implementado em `OcgCoreStub.advancePhase()` — quando currentPhase == END, incrementa turnNumber, alterna activePlayerId, seta firstTurn=false e compra carta.
 
-**Onde:** `PhaseServiceImpl.advance()`, `OcgCoreStub.advancePhase()`
+**Arquivo:** `OcgCoreStub.advancePhase():60-64`
 
-**Checklist:**
-- [ ] No `OcgCoreStub.advancePhase()`, quando `currentPhase == END`:
-  - [ ] Nova fase deve ser DRAW do proximo jogador
-  - [ ] Incrementar `turnNumber`
-  - [ ] Alternar `activePlayerId`
-- [ ] Se usar ocgcore real, verificar se ele ja faz isso — se sim, garantir que o adaptador propague
-
-**Estimativa:** S
+**Estimativa:** S — Concluido
 
 ---
 
-#### `[ ]` GAME-006C — LP nunca negativo (floor em 0)
+#### `[x]` GAME-006C — LP nunca negativo (floor em 0)
 
-**Descricao:** Life Points podem ficar negativos em calculos intermediarios. O valor exibido e persistido deve ser no minimo 0.
+**Descricao:** Implementado em `Player.java` — `setLifePoints()` usa `Math.max(0, lifePoints)`, `takeDamage()` e `gainLife()` com validacao de valor negativo.
 
-**Onde:** `Player` domain model
+**Arquivo:** `Player.java:30-46`
 
-**Checklist:**
-- [ ] Criar metodo `Player.takeDamage(int amount)` que faz `lifePoints = Math.max(0, lifePoints - amount)`
-- [ ] Criar metodo `Player.gainLife(int amount)` que faz `lifePoints += amount`
-- [ ] Remover atribuicoes diretas a `lifePoints` em todo o codigo
-- [ ] Usar `takeDamage()` no lugar de `setLifePoints()`
-
-**Estimativa:** XS
+**Estimativa:** XS — Concluido
 
 ---
 
-#### `[ ]` GAME-006D — Tratar empate (DRAW)
+#### `[x]` GAME-006D — Tratar empate (DRAW)
 
-**Descricao:** Quando ambos os jogadores perdem todos os LP simultaneamente (ex: ataque com dano maior que LP restante em ambos), o duelo deve terminar em empate.
+**Descricao:** Implementado em `OcgCoreStub.updateGameStatus()` — quando ambos os jogadores morrem, status=FINISHED e winnerId permanece null. `DuelHistoryMapper.toEntity()` ja trata winnerId==null como "DRAW".
 
-**Onde:** `ActionServiceImpl`, `OcgCorePort`
+**Arquivo:** `OcgCoreStub.java:273-285`, `DuelHistoryMapper.java:34`
 
-**Checklist:**
-- [ ] Apos processar acao no `ActionServiceImpl.process()`, verificar se ambos os `Player.isAlive()` sao false
-- [ ] Se ambos mortos → `endDuel(duelId, null)` — winnerId = null
-- [ ] No `DuelHistoryMapper.toEntity()`, tratar `winnerId == null` como resultado "DRAW"
-- [ ] Publicar `publishGameOver(duelId, null)` — frontend mostra "EMPATE"
-
-**Estimativa:** S
+**Estimativa:** S — Concluido
 
 ---
 
@@ -933,6 +754,20 @@ USUARIO                            FRONTEND                          DUEL-SERVIC
 - `[x]` Duel history and result persistence — 2026-04-28 — DuelHistoryEntity, DuelHistoryRepository
 - `[x]` Deck integration com deck-service via Feign — 2026-04-28 — DeckFeignClient
 - `[x]` Testes unitarios — 2026-04-28 — DuelHistoryMapperTest, SessionManagerTest, DuelControllerHistoryTest
+- `[x]` BUG-002: DuelEventPublisher.publishGameOver() duplicado — 2026-07-07 — Corrigido
+- `[x]` BUG-003: Coordenada Maven OpenFeign invalida — 2026-07-07 — Corrigido
+- `[x]` BUG-004: Conflito de beans DuelRepositoryPort — 2026-07-07 — Corrigido
+- `[x]` BUG-005: V1__init_schema.sql vazio — 2026-07-07 — Corrigido
+- `[x]` BUG-006: Endpoints REST sem autenticacao JWT — 2026-07-07 — Corrigido
+- `[x]` BUG-007: deck-service.url porta 8082 → 8081 — 2026-07-07 — Corrigido
+- `[x]` BUG-010: LP floor em 0 (takeDamage) — 2026-07-07 — Corrigido
+- `[x]` GAME-001: Shuffle + distribuir mao inicial — 2026-07-07 — Implementado
+- `[x]` GAME-002: Enriquecer Card com atk/def/level/type — 2026-07-07 — Implementado
+- `[x]` GAME-006A: Primeiro turno sem compra — 2026-07-07 — Implementado (implicito)
+- `[x]` GAME-006B: Incrementar turno + alternar jogador — 2026-07-07 — Implementado
+- `[x]` GAME-006C: LP nunca negativo (floor em 0) — 2026-07-07 — Implementado
+- `[x]` GAME-006D: Tratar empate (DRAW) — 2026-07-07 — Implementado
+- `[x]` DS-001: Criar docs/data-model.md — 2026-07-07 — Implementado
 
 ---
 
