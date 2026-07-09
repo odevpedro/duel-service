@@ -1,7 +1,7 @@
 # Data Model — duel-service
 
 > Documentacao do modelo de dados do duel-service.
-> Ultima atualizacao: 2026-07-07
+> Ultima atualizacao: 2026-07-09
 
 ---
 
@@ -35,6 +35,8 @@ Estado vivo de um duelo. Persistido em Redis (producao) ou InMemory (dev).
 | duelId | String | ID unico do duelo (UUID) |
 | playerAId | String | ID do jogador A |
 | playerBId | String | ID do jogador B |
+| playerADeckId | Long | ID do deck usado pelo jogador A |
+| playerBDeckId | Long | ID do deck usado pelo jogador B |
 | currentPhase | Phase | Fase atual do turno |
 | turnNumber | int | Numero do turno atual (inicia em 1) |
 | activePlayerId | String | ID do jogador que esta na vez |
@@ -42,11 +44,14 @@ Estado vivo de um duelo. Persistido em Redis (producao) ou InMemory (dev).
 | playerB | Player | Dados do jogador B |
 | status | GameStatus | Status atual do duelo |
 | winnerId | String | ID do vencedor (null se em andamento ou empate) |
+| victoryType | String | Tipo de vitoria: NORMAL, WO, DRAW, etc. |
+| duelType | String | Tipo de duelo: CASUAL, RANKED, FRIENDLY, etc. |
 | createdAt | LocalDateTime | Momento da criacao |
 | updatedAt | LocalDateTime | Ultima atualizacao |
 | firstTurn | boolean | Flag para primeiro turno (skip draw) |
 | disconnectedPlayerId | String | ID do jogador que desconectou (null se nenhum) |
 | disconnectedAt | LocalDateTime | Timestamp da desconexao |
+| version | long | Versao incremental do estado para detectar divergencia |
 
 **Metodos:**
 - `getOpponent(String playerId)` — retorna o Player oponente
@@ -68,6 +73,9 @@ Estado individual de cada jogador dentro do duelo.
 | hand | List<Card> | [] | Cartas na mao |
 | deck | List<Card> | [] | Cartas no deck (o que resta) |
 | graveyard | List<Card> | [] | Cartas no cemiterio |
+| banished | List<Card> | [] | Cartas banidas |
+| extraDeck | List<Card> | [] | Cartas do Extra Deck |
+| sideDeck | List<Card> | [] | Cartas do Side Deck |
 | monsterZones | List<Zone> | [] | Zonas de monstro (5 slots) |
 | spellTrapZones | List<Zone> | [] | Zonas de magia/armadilha (5 slots) |
 
@@ -89,6 +97,7 @@ Representacao de uma carta dentro do duelo.
 |-------|------|-----------|
 | cardId | String | ID da carta (vindo do card-service) |
 | name | String | Nome da carta |
+| imageUrl | String | URL da imagem da carta |
 | atk | int | Pontos de ataque |
 | def | int | Pontos de defesa |
 | level | int | Nivel/N: 1-12 (monstros) |
@@ -126,11 +135,15 @@ Registro persistente de um duelo finalizado. Usa JPA/H2 (dev) ou PostgreSQL (pro
 | duelId | String | UNIQUE, NOT NULL | ID do duelo |
 | playerAId | String | NOT NULL | ID do jogador A |
 | playerBId | String | NOT NULL | ID do jogador B |
+| playerADeckId | Long | nullable | ID do deck usado pelo jogador A |
+| playerBDeckId | Long | nullable | ID do deck usado pelo jogador B |
 | winnerId | String | nullable | ID do vencedor (null = empate) |
 | loserId | String | nullable | ID do perdedor |
 | playerAFinalLp | Integer | — | LP final do jogador A |
 | playerBFinalLp | Integer | — | LP final do jogador B |
 | turnCount | Integer | — | Numero de turnos |
+| duelType | String | — | Tipo de duelo |
+| victoryType | String | — | Tipo de vitoria |
 | result | String | — | COMPLETED ou DRAW |
 | startedAt | LocalDateTime | NOT NULL | Inicio do duelo |
 | finishedAt | LocalDateTime | — | Fim do duelo |
@@ -216,6 +229,9 @@ DuelState
  │               ├── hand ──→ Card[]
  │               ├── deck ──→ Card[]
  │               ├── graveyard ──→ Card[]
+ │               ├── banished ──→ Card[]
+ │               ├── extraDeck ──→ Card[]
+ │               ├── sideDeck ──→ Card[]
  │               └── monsterZones ──→ Zone[]
  │               └── spellTrapZones ──→ Zone[]
  │                                └── card ──→ Card
@@ -249,6 +265,7 @@ DuelHistoryEntity (tabela relacional, independente)
 | status | String | Status (IN_PROGRESS) |
 | turnNumber | int | Turno (1) |
 | activePlayerId | String | Jogador que comeca |
+| winnerId | String | Vencedor, quando o duelo terminou |
 
 ### DuelActionDTO
 
@@ -276,9 +293,13 @@ DuelHistoryEntity (tabela relacional, independente)
 | playerBId | String | Jogador B |
 | winnerId | String | Vencedor |
 | loserId | String | Perdedor |
+| playerADeckId | Long | Deck usado pelo jogador A |
+| playerBDeckId | Long | Deck usado pelo jogador B |
 | playerAFinalLp | Integer | LP final A |
 | playerBFinalLp | Integer | LP final B |
 | turnCount | Integer | Turnos |
+| duelType | String | Tipo de duelo |
+| victoryType | String | Tipo de vitoria |
 | result | String | COMPLETED / DRAW |
 | startedAt | String | ISO timestamp |
 | finishedAt | String | ISO timestamp |

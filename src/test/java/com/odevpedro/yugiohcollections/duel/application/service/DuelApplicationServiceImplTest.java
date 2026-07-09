@@ -6,10 +6,13 @@ import com.odevpedro.yugiohcollections.duel.application.mapper.DuelHistoryMapper
 import com.odevpedro.yugiohcollections.duel.application.mapper.DuelMapper;
 import com.odevpedro.yugiohcollections.duel.application.service.Impl.DuelApplicationServiceImpl;
 import com.odevpedro.yugiohcollections.duel.adapter.out.external.DeckFeignClient;
+import com.odevpedro.yugiohcollections.duel.adapter.out.external.DeckViewResponse;
+import com.odevpedro.yugiohcollections.duel.adapter.out.messaging.DuelLifecycleKafkaPublisher;
 import com.odevpedro.yugiohcollections.duel.adapter.out.persistence.repository.DuelHistoryRepository;
 import com.odevpedro.yugiohcollections.duel.domain.model.DuelState;
 import com.odevpedro.yugiohcollections.duel.domain.model.enums.GameStatus;
 import com.odevpedro.yugiohcollections.duel.domain.port.DuelRepositoryPort;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,7 +23,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.stream.IntStream;
 
@@ -34,8 +36,10 @@ class DuelApplicationServiceImplTest {
     @Mock private DuelRepositoryPort repository;
     @Mock private DuelHistoryRepository historyRepository;
     @Mock private DeckFeignClient deckFeignClient;
+    @Mock private DuelLifecycleKafkaPublisher lifecyclePublisher;
     @Mock private DuelMapper mapper;
     @Mock private DuelHistoryMapper historyMapper;
+    @Mock private MeterRegistry meterRegistry;
 
     @InjectMocks
     private DuelApplicationServiceImpl service;
@@ -133,15 +137,35 @@ class DuelApplicationServiceImplTest {
         assertThat(found.getDuelId()).isEqualTo("duel-1");
     }
 
-    private Map<String, Object> deckViewWithCards(int startId) {
-        List<Map<String, Object>> cards = IntStream.range(0, 40)
-                .mapToObj(index -> Map.<String, Object>of(
-                        "cardId", startId + index,
-                        "name", "Card " + (startId + index),
-                        "quantity", 1
-                ))
-                .toList();
+    private DeckViewResponse deckViewWithCards(int startId) {
+        DeckViewResponse response = new DeckViewResponse();
+        response.setId((long) startId);
+        response.setOwnerId("owner-" + startId);
+        response.setName("Deck " + startId);
+        response.setMainDeckCards(IntStream.range(0, 40)
+                .mapToObj(index -> deckCard(startId + index))
+                .toList());
+        response.setExtraDeckCards(List.of());
+        response.setSideDeckCards(List.of());
+        response.setMainDeckSize(40);
+        response.setExtraDeckSize(0);
+        response.setSideDeckSize(0);
+        response.setTotalCards(40);
+        response.setValid(true);
+        response.setValidationErrors(List.of());
+        return response;
+    }
 
-        return Map.of("cards", cards);
+    private com.odevpedro.yugiohcollections.duel.adapter.out.external.DeckCardSummaryDTO deckCard(int cardId) {
+        com.odevpedro.yugiohcollections.duel.adapter.out.external.DeckCardSummaryDTO card =
+                new com.odevpedro.yugiohcollections.duel.adapter.out.external.DeckCardSummaryDTO();
+        card.setCardId((long) cardId);
+        card.setName("Card " + cardId);
+        card.setQuantity(1);
+        card.setType("MONSTER");
+        card.setAtk(1000);
+        card.setDef(1000);
+        card.setLevel(4);
+        return card;
     }
 }

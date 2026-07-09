@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.slf4j.MDC;
 
 @Configuration
 public class FeignAuthForwardingConfig {
@@ -19,6 +20,16 @@ public class FeignAuthForwardingConfig {
                 if (authorization != null && !authorization.isBlank()) {
                     template.header("Authorization", authorization);
                 }
+            }
+        };
+    }
+
+    @Bean
+    public RequestInterceptor correlationIdForwarder() {
+        return template -> {
+            String correlationId = MDC.get(CorrelationIdFilter.MDC_KEY);
+            if (correlationId != null && !correlationId.isBlank()) {
+                template.header(CorrelationIdFilter.HEADER_NAME, correlationId);
             }
         };
     }

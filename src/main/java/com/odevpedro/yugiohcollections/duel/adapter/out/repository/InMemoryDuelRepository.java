@@ -17,6 +17,7 @@ public class InMemoryDuelRepository implements DuelRepositoryPort {
 
     @Override
     public DuelState save(DuelState duelState) {
+        duelState.setVersion(duelState.getVersion() + 1);
         store.put(duelState.getDuelId(), duelState);
         return duelState;
     }

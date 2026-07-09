@@ -17,8 +17,8 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 | Runtime       | Java 21                              |
 | Framework     | Spring Boot 3.2                      |
 | Real-time     | WebSocket + STOMP (SockJS)           |
-| Game Engine   | ocgcore (C++) via JNI                |
-| State Storage | In-memory (ConcurrentHashMap)        |
+| Game Engine   | ocgcore (C++) via JNI, com fallback Stub |
+| State Storage | Redis com fallback InMemory          |
 | Build        | Gradle                               |
 | Testes        | JUnit / Spring Boot Test              |
 
@@ -36,8 +36,8 @@ src/main/java/com/odevpedro/yugiohcollections/duel/
 │   │   └── websocket/             # DuelActionHandler, SessionHandler
 │   │       └── config/            # WebSocketConfig (STOMP)
 │   └── out/
-│       ├── messaging/             # DuelEventPublisher
-│       ├── repository/            # InMemoryDuelRepository
+│       ├── messaging/             # DuelEventPublisher + eventos Kafka
+│       ├── repository/            # RedisDuelRepository + InMemory fallback
 │       └── ocgcore/               # OcgCoreBridge, OcgCoreAdapter, OcgCoreLoader
 │
 ├── application/
@@ -82,9 +82,9 @@ A API estará disponível em `http://localhost:8084`.
 
 ## Biblioteca Nativa
 
-O duel-service carrega `ocgcore` como biblioteca nativa via JNI. O binário não é versionado — você deve compilarlocalmente.
+O duel-service carrega `ocgcore` como biblioteca nativa via JNI. Quando a biblioteca nativa nao esta disponivel, o servico usa o `OcgCoreStub` como fallback de desenvolvimento.
 
-**Compilando ocgcore**
+**Compilando ocgcore, se precisar reconstruir**
 
 ```bash
 git clone https://github.com/edo9300/ygopro-core
@@ -102,7 +102,7 @@ cmake --build .
 | Linux | `libocgcore.so` | `src/main/resources/native/libocgcore.so` |
 | macOS | `libocgcore.dylib` | `src/main/resources/native/libocgcore.dylib` |
 
-O `OcgCoreLoader` extrai o binário do JAR em runtime e carrega via `System.load`.
+O `OcgCoreLoader` extrai o binario do JAR em runtime e carrega via `System.load`.
 
 ---
 

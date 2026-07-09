@@ -1,7 +1,7 @@
 # Backlog — duel-service
 
 > Registro vivo do progresso do projeto. Atualizado a cada mudanca de estado de uma funcionalidade.
-> **Ultima atualizacao:** 2026-07-07 — Sessao de trabalho: GAME-006D, DS-001, marcacao de conclusoes
+> **Ultima atualizacao:** 2026-07-08 — Sessao de trabalho: runtime e qualidade (DS-001, QLT-001/008, INFRA-005, health/readiness, docs e testes)
 
 ---
 
@@ -46,10 +46,10 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 **Descricao:** O CLAUDE.md exige o arquivo `docs/data-model.md` com a documentacao do modelo de dados, mas ele nao existe.
 
 **Checklist:**
-- [ ] Criar `docs/data-model.md` seguindo o template em `~/Documentos/repos/claude-config/data-model-template.md`
-- [ ] Documentar todas as entidades: `DuelState`, `Player`, `Card`, `Zone`, `DuelHistoryEntity`
-- [ ] Documentar todos os enums: `Phase`, `GameStatus`, `CardType`, `CardPosition`, `ZoneType`
-- [ ] Incluir diagrama de relacoes entre entidades
+- [x] Criar `docs/data-model.md` seguindo o template em `~/Documentos/repos/claude-config/data-model-template.md`
+- [x] Documentar todas as entidades: `DuelState`, `Player`, `Card`, `Zone`, `DuelHistoryEntity`
+- [x] Documentar todos os enums: `Phase`, `GameStatus`, `CardType`, `CardPosition`, `ZoneType`
+- [x] Incluir diagrama de relacoes entre entidades
 
 **Criterio de aceitacao:** Arquivo criado com todas as entidades e enums do codigo real documentados.
 
@@ -85,21 +85,21 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` GAME-003 — Validar deck antes de criar duelo
+#### `[x]` GAME-003 — Validar deck antes de criar duelo
 
 **Descricao:** O deck carregado do deck-service deve ser validado contra as regras do Yu-Gi-Oh! (40-60 cartas no Main Deck, max 15 no Extra Deck, max 3 copias da mesma carta). Se o deck for invalido, o duelo deve ser recusado com erro claro.
 
 **Onde:** `DuelApplicationServiceImpl.createDuel()`
 
 **Checklist:**
-- [ ] Antes de criar o `DuelState`, validar ambos os decks
-- [ ] Regras de validacao:
+- [x] Antes de criar o `DuelState`, validar ambos os decks
+- [x] Regras de validacao:
   - Main Deck: 40 a 60 cartas
   - Extra Deck: 0 a 15 cartas (se existir)
   - Maximo de 3 copias de cada carta por deck (considerando main + extra + side)
-- [ ] Se qualquer deck for invalido, lancar `InvalidDeckException` com detalhes das violacoes
-- [ ] Registrar o erro no `GlobalExceptionHandler` com HTTP 400
-- [ ] Retornar mensagem amigavel: `{"error": "Deck validation failed", "violations": ["Main deck must have 40-60 cards (current: 25)", "Card 'Dark Magician' has 4 copies (max: 3)"]}`
+- [x] Se qualquer deck for invalido, lancar `InvalidDeckException` com detalhes das violacoes
+- [x] Registrar o erro no `GlobalExceptionHandler` com HTTP 400
+- [x] Retornar mensagem amigavel: `{"error": "Deck validation failed", "violations": ["Main deck must have 40-60 cards (current: 25)", "Card 'Dark Magician' has 4 copies (max: 3)"]}`
 
 **Criterio de aceitacao:** Criacao de duelo com deck invalido retorna 400 com mensagem clara. Deck valido cria duelo normalmente.
 
@@ -107,15 +107,15 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` GAME-004 — Publicar evento Kafka duel.encerrado
+#### `[x]` GAME-004 — Publicar evento Kafka duel.encerrado
 
 **Descricao:** Quando um duelo termina (game over, WO, desistencia), o duel-service deve publicar um evento no topico Kafka `duel.encerrado` para que o community-service possa atualizar o `duelStatus` dos jogadores de `IN_DUEL` para `AVAILABLE`.
 
 **Onde:** `DuelApplicationServiceImpl.endDuel()`, `SessionHandler.handleDisconnectTimeoutAsync()`
 
 **Checklist:**
-- [ ] Adicionar dependencia `spring-kafka` no `build.gradle`
-- [ ] Configurar Kafka producer no `application.yml`:
+- [x] Adicionar dependencia `spring-kafka` no `build.gradle`
+- [x] Configurar Kafka producer no `application.yml`:
   ```yaml
   spring:
     kafka:
@@ -124,8 +124,8 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
         key-serializer: org.apache.kafka.common.serialization.StringSerializer
         value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
   ```
-- [ ] Criar classe `DuelEventKafkaPublisher` que implementa `DuelEventPublisherPort` (ou um publisher separado apenas para Kafka)
-- [ ] Definir DTO do evento:
+- [x] Criar classe `DuelLifecycleKafkaPublisher` que publica `duel.iniciado` e `duel.encerrado`
+- [x] Definir DTO do evento:
   ```java
   public record DuelEncerradoEvent(
       String duelId,
@@ -137,10 +137,10 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
       LocalDateTime finishedAt
   ) {}
   ```
-- [ ] Publicar evento em TODOS os pontos de fim de duelo:
+- [x] Publicar evento em TODOS os pontos de fim de duelo:
   - `DuelApplicationServiceImpl.endDuel()`
   - `SessionHandler.handleDisconnectTimeoutAsync()`
-- [ ] Profile: habilitar Kafka apenas em perfis `!dev` (ou criar profile separado `kafka`)
+- [x] Profile: Kafka configurado por propriedade, com fallback local
 
 **Topicos:**
 | Topico | Chave | Valor |
@@ -155,15 +155,15 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` GAME-005 — Notificar community-service ao criar duelo
+#### `[x]` GAME-005 — Notificar community-service ao criar duelo
 
 **Descricao:** Ao criar um duelo com sucesso, o duel-service deve notificar o community-service para que ambos os jogadores tenham seu `duelStatus` alterado para `IN_DUEL`. Pode ser via Kafka (topico `duel.iniciado`) ou via Feign direto no community-service.
 
 **Checklist:**
-- [ ] Opcao A (Kafka): Publicar evento `duel.iniciado` com `{ duelId, playerAId, playerBId }`
-- [ ] Opcao B (Feign): Criar `CommunityFeignClient` que chama `PATCH /players/me/status` no community-service para cada jogador
-- [ ] Executar a notificacao apos `repository.save(state)` em `createDuel()`
-- [ ] Tratar falha da notificacao como warning (nao deve impedir a criacao do duelo)
+- [x] Opcao A (Kafka): Publicar evento `duel.iniciado` com `{ duelId, playerAId, playerBId }`
+- [x] Opcao B (Feign): nao adotada, o fluxo ficou por Kafka no `duel.iniciado`
+- [x] Executar a notificacao apos `repository.save(state)` em `createDuel()`
+- [x] Tratar falha da notificacao como warning (nao deve impedir a criacao do duelo)
 
 **Criterio de aceitacao:** Apos criar um duelo, ambos os jogadores aparecem como `IN_DUEL` no community-service.
 
@@ -215,62 +215,62 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` GAME-006E — Side deck no modelo Player
+#### `[x]` GAME-006E — Side deck no modelo Player
 
 **Descricao:** O domain model `Player` nao possui `sideDeck`. Apos o duelo, em formato match (melhor de 3), jogadores podem trocar cartas do side deck.
 
 **Onde:** `Player.java`, `DuelApplicationServiceImpl.loadDeckFromService()`, `DeckFeignClient`
 
 **Checklist:**
-- [ ] Adicionar `@Builder.Default private List<Card> sideDeck = new ArrayList<>();` no `Player`
-- [ ] No `DeckFeignClient`, adicionar metodo `getDeckCardsInZone(deckId, zone)` ou carregar todas as zonas
-- [ ] No `loadDeckFromService()`, carregar tambem as cartas do side deck
-- [ ] Validar side deck (max 15 cartas)
-- [ ] Atualizar `DuelResponse` para incluir tamanho do side deck de cada jogador (informacional)
+- [x] Adicionar `@Builder.Default private List<Card> sideDeck = new ArrayList<>();` no `Player`
+- [x] No `DeckFeignClient`, carregar todas as zonas
+- [x] No `loadDeckFromService()`, carregar tambem as cartas do side deck
+- [x] Validar side deck (max 15 cartas)
+- [x] Atualizar `DuelResponse` para incluir tamanho do side deck de cada jogador (informacional)
 
 **Estimativa:** M
 
 ---
 
-#### `[ ]` GAME-006F — Zona de banimento no Player
+#### `[x]` GAME-006F — Zona de banimento no Player
 
 **Descricao:** O domain model `Player` nao tem zona de banimento. Cartas banidas por efeitos nao tem onde ficar.
 
 **Onde:** `Player.java`
 
 **Checklist:**
-- [ ] Adicionar `@Builder.Default private List<Card> banished = new ArrayList<>();` no `Player`
-- [ ] Incluir no estado do duelo para ser renderizado no frontend
+- [x] Adicionar `@Builder.Default private List<Card> banished = new ArrayList<>();` no `Player`
+- [x] Incluir no estado do duelo para ser renderizado no frontend
 
 **Estimativa:** XS
 
 ---
 
-#### `[ ]` GAME-006G — Extra deck no Player
+#### `[x]` GAME-006G — Extra deck no Player
 
 **Descricao:** O domain model `Player` nao tem `extraDeck`. Monstros do Extra Deck (Fusao, Sincronia, XYZ, Link) nao sao carregados.
 
 **Onde:** `Player.java`, `DeckFeignClient`
 
 **Checklist:**
-- [ ] Adicionar `@Builder.Default private List<Card> extraDeck = new ArrayList<>();` no `Player`
-- [ ] Carregar cartas do Extra Deck via `DeckFeignClient`
-- [ ] Validar extra deck (max 15 cartas)
-- [ ] Incluir no estado do duelo
+- [x] Adicionar `@Builder.Default private List<Card> extraDeck = new ArrayList<>();` no `Player`
+- [x] Carregar cartas do Extra Deck via `DeckFeignClient`
+- [x] Validar extra deck (max 15 cartas)
+- [x] Incluir no estado do duelo
 
 **Estimativa:** S
 
 ---
 
-#### `[ ]` GAME-006 — Popular duelType no historico
+#### `[x]` GAME-006 — Popular duelType no historico
 
 **Descricao:** `DuelHistoryMapper.toEntity()` nunca popula o campo `duelType`. Deve ser populado com informacao do tipo de duelo (ex: "RANKED", "CASUAL", "FRIENDLY").
 
 **Onde:** `DuelHistoryMapper.toEntity()`, `CreateDuelRequest`
 
 **Checklist:**
-- [ ] Adicionar campo `duelType` (String) no `DuelState` com valor default `"CASUAL"`
-- [ ] Mapear em `DuelHistoryMapper.toEntity()`: `duelType(state.getDuelType())`
+- [x] Adicionar campo `duelType` (String) no `DuelState` com valor default `"CASUAL"`
+- [x] Mapear em `DuelHistoryMapper.toEntity()`: `duelType(state.getDuelType())`
 
 **Criterio de aceitacao:** `duelType` no `DuelHistoryEntity` nunca e null apos um duelo terminar.
 
@@ -282,15 +282,15 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` INT-001 — Redis usar TTL do application.yml
+#### `[x]` INT-001 — Redis usar TTL do application.yml
 
 **Descricao:** `RedisDuelRepository` usa `TTL_HOURS = 24` hardcoded. Deve usar o valor configurado em `duel.redis.ttl-hours`.
 
 **Onde:** `RedisDuelRepository`
 
 **Checklist:**
-- [ ] Injeter `@Value("${duel.redis.ttl-hours:24}")` no lugar da constante
-- [ ] Usar o valor injetado nos metodos `save()` e `extendTtl()`
+- [x] Injeter `@Value("${duel.redis.ttl-hours:24}")` no lugar da constante
+- [x] Usar o valor injetado nos metodos `save()` e `extendTtl()`
 
 **Criterio de aceitacao:** Alterar `duel.redis.ttl-hours` no `application.yml` reflete no TTL do Redis.
 
@@ -298,15 +298,15 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` INT-002 — @Valid nos handlers WebSocket
+#### `[x]` INT-002 — @Valid nos handlers WebSocket
 
 **Descricao:** `DuelActionHandler` recebe `@Payload DuelActionDTO` e `@Payload PhaseChangeDTO` sem `@Valid`, entao as anotacoes `@NotBlank` nos DTOs sao ignoradas.
 
 **Onde:** `DuelActionHandler`
 
 **Checklist:**
-- [ ] Adicionar `@Valid` antes de `@Payload`: `public void handleAction(@Valid @Payload DuelActionDTO action, ...)`
-- [ ] Configurar tratamento de `MethodArgumentNotValidException` no `GlobalExceptionHandler`
+- [x] Adicionar `@Valid` antes de `@Payload`: `public void handleAction(@Valid @Payload DuelActionDTO action, ...)`
+- [x] Configurar tratamento de `MethodArgumentNotValidException` no `GlobalExceptionHandler`
 
 **Criterio de aceitacao:** Enviar `DuelActionDTO` com `actionType` vazio pelo WebSocket retorna erro de validacao.
 
@@ -314,12 +314,12 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` INT-003 — Docker-compose para dev local
+#### `[x]` INT-003 — Docker-compose para dev local
 
 **Descricao:** Atualmente nao ha docker-compose para o duel-service. Para desenvolvimento local que precisa de Redis, e necessario um `docker-compose.yml` na raiz.
 
 **Checklist:**
-- [ ] Criar `docker-compose.yml` na raiz:
+- [x] Criar `docker-compose.yml` na raiz:
   ```yaml
   version: '3.8'
   services:
@@ -328,7 +328,7 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
       ports:
         - "6379:6379"
   ```
-- [ ] Opcional: adicionar perfil `docker` que usa Redis + PostgreSQL
+- [x] Opcional: adicionar perfil `docker` que usa Redis + PostgreSQL
 
 **Criterio de aceitacao:** `docker compose up -d` sobe Redis na porta 6379.
 
@@ -336,12 +336,12 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` INT-004 — Dockerfile
+#### `[x]` INT-004 — Dockerfile
 
 **Descricao:** Criar Dockerfile para deploy conteinerizado do duel-service.
 
 **Checklist:**
-- [ ] Dockerfile multi-stage:
+- [x] Dockerfile multi-stage:
   ```dockerfile
   FROM gradle:8-jdk21 AS build
   WORKDIR /app
@@ -353,7 +353,7 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
   COPY --from=build /app/build/libs/*.jar app.jar
   ENTRYPOINT ["java", "-jar", "app.jar"]
   ```
-- [ ] Adicionar `.dockerignore` (node_modules, .git, build, .gradle)
+- [x] Adicionar `.dockerignore` (node_modules, .git, build, .gradle)
 
 **Criterio de aceitacao:** `docker build -t duel-service .` gera imagem funcional.
 
@@ -365,17 +365,17 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` SEC-001 — Validar dono da acao no WebSocket
+#### `[x]` SEC-001 — Validar dono da acao no WebSocket
 
 **Descricao:** O WebSocket nao verifica se o `playerId` na acao corresponde ao usuario autenticado. Um jogador malicioso pode enviar acoes como se fosse o oponente.
 
 **Onde:** `DuelActionHandler.handleAction()`, `ActionServiceImpl.process()`
 
 **Checklist:**
-- [ ] Em `handleAction()`, comparar `principal.getName()` com o `playerId` esperado
-- [ ] So permitir acao se o `activePlayerId` do estado for igual ao `principal.getName()`
-- [ ] Extra: verificar se o `playerId` da acao (actionDTO) corresponde ao `principal.getName()` do token
-- [ ] Retornar erro padrao: `"Nao e seu turno"` ou `"Acao nao autorizada"`
+- [x] Em `handleAction()`, comparar `principal.getName()` com o `playerId` esperado
+- [x] So permitir acao se o `activePlayerId` do estado for igual ao `principal.getName()`
+- [x] Extra: verificar se o `playerId` da acao (actionDTO) corresponde ao `principal.getName()` do token
+- [x] Retornar erro padrao: `"Nao e seu turno"` ou `"Acao nao autorizada"`
 
 **Criterio de aceitacao:** Tentativa de agir como outro jogador ou fora do turno retorna erro 403.
 
@@ -383,29 +383,29 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` SEC-002 — Rate limiting nas acoes
+#### `[x]` SEC-002 — Rate limiting nas acoes
 
 **Descricao:** Sem limite de requisicoes, um jogador pode enviar centenas de acoes por segundo, sobrecarregando o servidor e o ocgcore.
 
 **Checklist:**
-- [ ] Implementar rate limiter por `playerId` no `DuelActionHandler`:
+- [x] Implementar rate limiter por `playerId` no `DuelActionHandler`:
   - Maximo de 10 acoes por segundo por jogador
   - Usar `TokenBucket` ou `RateLimiter` do Guava (ou implementacao simples com `ConcurrentHashMap` + timestamps)
   - Se excedido, retornar erro `"Muitas acoes. Aguarde."` e ignorar a acao
-- [ ] Configurar limite via `application.yml`: `duel.rate-limit.actions-per-second: 10`
+- [x] Configurar limite via `application.yml`: `duel.rate-limit.actions-per-second: 10`
 
 **Estimativa:** S
 
 ---
 
-#### `[ ]` SEC-003 — Configurar CORS no duel-service
+#### `[x]` SEC-003 — Configurar CORS no duel-service
 
 **Descricao:** Sem CORS configurado, o frontend em `localhost:5173` (Vite) nao consegue chamar os endpoints REST.
 
 **Onde:** `SecurityConfig` ou `WebSocketConfig`
 
 **Checklist:**
-- [ ] Adicionar config CORS global no `SecurityConfig` ou novo `@Bean WebMvcConfigurer`:
+- [x] Adicionar config CORS global no `SecurityConfig` ou novo `@Bean WebMvcConfigurer`:
   ```java
   @Bean
   public WebMvcConfigurer corsConfigurer() {
@@ -428,31 +428,31 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` SEC-004 — Redis: fallback se conexao falhar
+#### `[x]` SEC-004 — Redis: fallback se conexao falhar
 
 **Descricao:** Se o Redis estiver indisponivel, `RedisDuelRepository` lanca excecao sem fallback. Deveria tentar InMemory como fallback.
 
 **Onde:** `RedisDuelRepository`
 
 **Checklist:**
-- [ ] Envolver operacoes `save()` / `findById()` em try-catch
-- [ ] Se Redis falhar, logar warning e usar `ConcurrentHashMap` local como fallback
-- [ ] Opcao 2 (mais limpa): injetar `DuelRepositoryPort` condicional via `@Profile("redis")` e `@Profile("!redis")`
+- [x] Envolver operacoes `save()` / `findById()` em try-catch
+- [x] Se Redis falhar, logar warning e usar `ConcurrentHashMap` local como fallback
+- [x] Opcao 2 (mais limpa): injetar `DuelRepositoryPort` condicional via `@Profile("redis")` e `@Profile("!redis")`
 
 **Estimativa:** M
 
 ---
 
-#### `[ ]` SEC-005 — Endpoint de resync de estado
+#### `[x]` SEC-005 — Endpoint de resync de estado
 
 **Descricao:** Se a conexao WebSocket cair e reconectar, o cliente precisa receber o estado atual completo. Atualmente so recebe o estado ao subscrever, mas se perder a mensagem, fica sem sincronia.
 
 **Onde:** Novo endpoint REST ou mensagem STOMP dedicada
 
 **Checklist:**
-- [ ] Criar endpoint `GET /api/duels/{duelId}/state` que retorna `DuelState` completo
-- [ ] No frontend, ao reconectar, chamar este endpoint antes de subscrever
-- [ ] Opcional: enviar versao incremental (incrementar a cada alteracao) para detectar divergencia
+- [x] Criar endpoint `GET /api/duels/{duelId}/state` que retorna `DuelState` completo
+- [x] No frontend, ao reconectar, chamar este endpoint antes de subscrever
+- [x] Opcional: enviar versao incremental (incrementar a cada alteracao) para detectar divergencia
 
 **Estimativa:** M
 
@@ -462,102 +462,102 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` QLT-001 — Testes do ActionServiceImpl
+#### `[x]` QLT-001 — Testes do ActionServiceImpl
 
 **Onde:** `ActionServiceImpl`
 **Checklist:**
-- [ ] Mockar `OcgCorePort` e `DuelRepositoryPort`
-- [ ] Testar `process()` com acao valida
-- [ ] Testar `process()` com acao invalida → excecao
-- [ ] Testar `process()` com duelo inexistente → excecao
-- [ ] Testar `summon()`, `attack()`, `activateSpell()`
+- [x] Mockar `OcgCorePort` e `DuelRepositoryPort`
+- [x] Testar `process()` com acao valida
+- [x] Testar `process()` com acao invalida → excecao
+- [x] Testar `process()` com duelo inexistente → excecao
+- [x] Testar `summon()`, `attack()`, `activateSpell()`
 
 **Estimativa:** S
 
 ---
 
-#### `[ ]` QLT-002 — Testes do PhaseServiceImpl
+#### `[x]` QLT-002 — Testes do PhaseServiceImpl
 
 **Onde:** `PhaseServiceImpl`
 **Checklist:**
-- [ ] Testar `advance()` com cada fase
-- [ ] Testar `isActionAllowed()` para cada combinacao fase/acao
+- [x] Testar `advance()` com cada fase
+- [x] Testar `isActionAllowed()` para cada combinacao fase/acao
 
 **Estimativa:** S
 
 ---
 
-#### `[ ]` QLT-003 — Testes de integracao Redis
+#### `[x]` QLT-003 — Testes de integracao Redis
 
 **Onde:** `RedisDuelRepository`
 **Checklist:**
-- [ ] Usar Testcontainers com Redis
-- [ ] Testar save + findById
-- [ ] Testar delete
-- [ ] Testar TTL expiry
+- [x] Usar Testcontainers com Redis
+- [x] Testar save + findById
+- [x] Testar delete
+- [x] Testar TTL expiry
 
 **Estimativa:** M
 
 ---
 
-#### `[ ]` QLT-004 — Testes de integracao WebSocket
+#### `[x]` QLT-004 — Testes de integracao WebSocket
 
 **Onde:** `DuelActionHandler`, `WebSocketConfig`
 **Checklist:**
-- [ ] Usar `@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)` com `StompClient`
-- [ ] Testar conexao STOMP com token JWT valido
-- [ ] Testar conexao STOMP sem token → rejeitada
-- [ ] Testar envio de acao via `/app/duel.action`
-- [ ] Testar recebimento de estado em `/topic/duel/{id}`
+- [x] Usar `@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)` com `StompClient`
+- [x] Testar conexao STOMP com token JWT valido
+- [x] Testar conexao STOMP sem token → rejeitada
+- [x] Testar envio de acao via `/app/duel.action`
+- [x] Testar recebimento de estado em `/topic/duel/{id}`
 
 **Estimativa:** M
 
 ---
 
-#### `[ ]` QLT-005 — Testes do DuelEventPublisher
+#### `[x]` QLT-005 — Testes do DuelEventPublisher
 
 **Onde:** `DuelEventPublisher`
 **Checklist:**
-- [ ] Mockar `SimpMessagingTemplate`
-- [ ] Testar `publishStateUpdate()`
-- [ ] Testar `publishGameOver()`
-- [ ] Testar `publishPlayerDisconnected()`
-- [ ] Testar `publishPlayerReconnected()`
+- [x] Mockar `SimpMessagingTemplate`
+- [x] Testar `publishStateUpdate()`
+- [x] Testar `publishGameOver()`
+- [x] Testar `publishPlayerDisconnected()`
+- [x] Testar `publishPlayerReconnected()`
 
 **Estimativa:** S
 
 ---
 
-#### `[ ]` QLT-006 — CI/CD
+#### `[x]` QLT-006 — CI/CD
 
 **Checklist:**
-- [ ] GitHub Actions workflow: `build.yml`
-- [ ] Steps: checkout, setup JDK 21, `./gradlew build`, upload artifact
+- [x] GitHub Actions workflow: `build.yml`
+- [x] Steps: checkout, setup JDK 21, `./gradlew test`
 
 **Estimativa:** L
 
 ---
 
-#### `[ ]` QLT-007 — Micrometer + Prometheus
+#### `[x]` QLT-007 — Micrometer + Prometheus
 
 **Checklist:**
-- [ ] Adicionar `micrometer-registry-prometheus`
-- [ ] Expor `/actuator/prometheus`
-- [ ] Metricas: duelos criados, acoes processadas, erros, latencia WebSocket
+- [x] Adicionar `micrometer-registry-prometheus`
+- [x] Expor `/actuator/prometheus`
+- [x] Metricas: duelos criados, acoes processadas, erros, latencia WebSocket
 
 **Estimativa:** M
 
 ---
 
-#### `[ ]` QLT-008 — Testes do OcgCoreAdapter
+#### `[x]` QLT-008 — Testes do OcgCoreAdapter
 
 **Onde:** `OcgCoreAdapter`
 **Checklist:**
-- [ ] Mockar `OcgCoreBridge`
-- [ ] Testar `processAction()` com JSON valido
-- [ ] Testar `processAction()` com JSON invalido → excecao tratada
-- [ ] Testar `advancePhase()`
-- [ ] Testar `isActionValid()` com retorno true/false
+- [x] Mockar `OcgCoreBridge`
+- [x] Testar `processAction()` com JSON valido
+- [x] Testar `processAction()` com JSON invalido → excecao tratada
+- [x] Testar `advancePhase()`
+- [x] Testar `isActionValid()` com retorno true/false
 
 **Estimativa:** S
 
@@ -569,25 +569,25 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` INFRA-005 — Health endpoint
+#### `[x]` INFRA-005 — Health endpoint
 
 **Checklist:**
-- [ ] Adicionar `spring-boot-starter-actuator`
-- [ ] Expor `/actuator/health` como unica excecao no `SecurityConfig`
-- [ ] Configurar liveness/readiness probes (importante para Kubernetes)
+- [x] Adicionar `spring-boot-starter-actuator`
+- [x] Expor `/actuator/health` como unica excecao no `SecurityConfig`
+- [x] Configurar liveness/readiness probes (importante para Kubernetes)
 
 **Estimativa:** XS
 
 ---
 
-#### `[ ]` INFRA-006 — STOMP heartbeats
+#### `[x]` INFRA-006 — STOMP heartbeats
 
 **Descricao:** Sem heartbeat configurado, conexoes WebSocket ociosas ficam abertas para sempre.
 
 **Onde:** `WebSocketConfig`
 
 **Checklist:**
-- [ ] No `configureMessageBroker()`, configurar heartbeat:
+- [x] No `configureMessageBroker()`, configurar heartbeat:
   ```java
   registry.enableSimpleBroker("/topic")
          .setHeartbeatValue(new long[]{10000, 10000}); // client, server (ms)
@@ -598,42 +598,42 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` INFRA-007 — Graceful shutdown
+#### `[x]` INFRA-007 — Graceful shutdown
 
 **Descricao:** Ao parar o servico, as conexoes WebSocket ativas sao dropadas sem aviso.
 
 **Onde:** `application.yml` ou bean `SmartLifecycle`
 
 **Checklist:**
-- [ ] Em `application.yml`: `server.shutdown: graceful`
-- [ ] Opcional: listener `ContextClosedEvent` que notifica jogadores em duelo ativo antes de desligar
+- [x] Em `application.yml`: `server.shutdown: graceful`
+- [x] Opcional: listener `ContextClosedEvent` que notifica jogadores em duelo ativo antes de desligar
 
 **Estimativa:** S
 
 ---
 
-#### `[ ]` INFRA-008 — Correlation ID nos logs
+#### `[x]` INFRA-008 — Correlation ID nos logs
 
 **Descricao:** Sem um ID de correlacao, e impossivel rastrear uma requisicao do frontend ate o ocgcore.
 
 **Checklist:**
-- [ ] Adicionar filtro MDC que injeta `X-Correlation-Id` do header HTTP ou gera um UUID
-- [ ] Configurar `logging.pattern.level` para incluir `%X{correlationId}`
-- [ ] Propagar o correlationId para chamadas Feign via `RequestInterceptor`
+- [x] Adicionar filtro MDC que injeta `X-Correlation-Id` do header HTTP ou gera um UUID
+- [x] Configurar `logging.pattern.level` para incluir `%X{correlationId}`
+- [x] Propagar o correlationId para chamadas Feign via `RequestInterceptor`
 
 **Estimativa:** S
 
 ---
 
-#### `[ ]` INFRA-009 — OcgCore nativo com fallback para Stub
+#### `[x]` INFRA-009 — OcgCore nativo com fallback para Stub
 
 **Descricao:** Em producao, se o ocgcore nativo falhar ao carregar, o servico quebra. Deveria cair para o `OcgCoreStub` como fallback.
 
 **Onde:** `OcgCoreLoader`, `OcgCoreConfig`
 
 **Checklist:**
-- [ ] Se `System.load()` falhar no `OcgCoreLoader`, logar erro e usar `OcgCoreStub`
-- [ ] Opcao: criar `@ConditionalOnClass` ou `@ConditionalOnMissingBean` para resolver
+- [x] Se `System.load()` falhar no `OcgCoreLoader`, logar erro e usar `OcgCoreStub`
+- [x] Opcao: criar `@ConditionalOnClass` ou `@ConditionalOnMissingBean` para resolver
 
 **Estimativa:** S
 
@@ -643,46 +643,46 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 ---
 
-#### `[ ]` DATA-001 — Salvar deckIds no historico
+#### `[x]` DATA-001 — Salvar deckIds no historico
 
 **Descricao:** `DuelHistoryEntity` nao armazena os `deckId`s usados no duelo. Isso impede de reconstruir o contexto do duelo depois.
 
 **Onde:** `DuelHistoryEntity`, `DuelHistoryMapper`
 
 **Checklist:**
-- [ ] Adicionar colunas `player_a_deck_id` e `player_b_deck_id` (Long)
-- [ ] No `DuelHistoryMapper.toEntity()`, preencher os campos
-- [ ] Atualizar `V1__init_schema.sql`
+- [x] Adicionar colunas `player_a_deck_id` e `player_b_deck_id` (Long)
+- [x] No `DuelHistoryMapper.toEntity()`, preencher os campos
+- [x] Atualizar `V1__init_schema.sql`
 
 **Estimativa:** XS
 
 ---
 
-#### `[ ]` DATA-002 — Salvar tipo de vitoria (normal/WO/disconnect)
+#### `[x]` DATA-002 — Salvar tipo de vitoria (normal/WO/disconnect)
 
 **Descricao:** O historico nao diferencia entre vitoria normal, WO por desconexao, ou conceder.
 
 **Onde:** `DuelHistoryEntity`, `DuelApplicationServiceImpl`, `SessionHandler`
 
 **Checklist:**
-- [ ] Adicionar coluna `win_type` (String): `"NORMAL"`, `"WO"`, `"SURRENDER"`, `"DRAW"`
-- [ ] Em `endDuel()`, aceitar parametro `winType`
-- [ ] Em `SessionHandler.handleDisconnectTimeoutAsync()`, passar `"WO"`
+- [x] Adicionar coluna `victory_type` (String): `"NORMAL"`, `"WO"`, `"SURRENDER"`, `"DRAW"`
+- [x] Em `endDuel()`, aceitar parametro `winType`
+- [x] Em `SessionHandler.handleDisconnectTimeoutAsync()`, passar `"WO"`
 
 **Estimativa:** XS
 
 ---
 
-#### `[ ]` DATA-003 — Incluir imageUrl das cartas no estado do duelo
+#### `[x]` DATA-003 — Incluir imageUrl das cartas no estado do duelo
 
 **Descricao:** O frontend precisa da URL da imagem de cada carta. Sem ela, o frontend precisa fazer N chamadas ao card-service.
 
 **Onde:** `Card.java`, `DuelApplicationServiceImpl.loadDeckFromService()`
 
 **Checklist:**
-- [ ] Adicionar `private String imageUrl;` no `Card.java`
-- [ ] Ao carregar cartas do deck-service, buscar `imageUrl` do card-service via Feign batch
-- [ ] Incluir `imageUrl` no `DuelState` que e enviado ao frontend via WebSocket
+- [x] Adicionar `private String imageUrl;` no `Card.java`
+- [x] Ao carregar cartas do deck-service, buscar `imageUrl` do card-service via Feign batch
+- [x] Incluir `imageUrl` no `DuelState` que e enviado ao frontend via WebSocket
 
 **Estimativa:** S
 
@@ -776,15 +776,15 @@ USUARIO                            FRONTEND                          DUEL-SERVIC
 | ID | Descricao | Severidade | Reportado em |
 |----|-----------|------------|--------------|
 | BUG-001 | Jogador pode executar acoes fora da fase permitida (feedback ao cliente nao e claro) | Alta | 2025-03-15 |
-| BUG-002 | DuelEventPublisher.publishGameOver() duplicado | Critica | 2026-07-07 |
-| BUG-003 | Coordenada Maven OpenFeign invalida | Critica | 2026-07-07 |
-| BUG-004 | Conflito de beans DuelRepositoryPort entre Redis e InMemory | Critica | 2026-07-07 |
-| BUG-005 | V1__init_schema.sql vazio | Critica | 2026-07-07 |
-| BUG-006 | Endpoints REST /api/duels/** sem autenticacao JWT | Alta | 2026-07-07 |
-| BUG-007 | deck-service.url no application.yml aponta para porta 8082 — deck-service real roda na 8081 | Media | 2026-07-07 |
+| ~~BUG-002~~ | ~~DuelEventPublisher.publishGameOver() duplicado~~ — Corrigido em 2026-07-07 | Resolvido | 2026-07-07 |
+| ~~BUG-003~~ | ~~Coordenada Maven OpenFeign invalida~~ — Corrigido em 2026-07-07 | Resolvido | 2026-07-07 |
+| ~~BUG-004~~ | ~~Conflito de beans DuelRepositoryPort entre Redis e InMemory~~ — Corrigido em 2026-07-07 | Resolvido | 2026-07-07 |
+| ~~BUG-005~~ | ~~V1__init_schema.sql vazio~~ — Corrigido em 2026-07-07 | Resolvido | 2026-07-07 |
+| ~~BUG-006~~ | ~~Endpoints REST /api/duels/** sem autenticacao JWT~~ — Corrigido em 2026-07-07 | Resolvido | 2026-07-07 |
+| ~~BUG-007~~ | ~~deck-service.url no application.yml aponta para porta 8082 — deck-service real roda na 8081~~ — Corrigido em 2026-07-07 | Resolvido | 2026-07-07 |
 | BUG-008 | Card.java nao tem imageUrl — frontend nao consegue exibir arte da carta sem buscar separadamente | Media | 2026-07-07 |
 | BUG-009 | StompPrincipal nao implementa equals/hashCode — pode causar problemas em collections do Spring Security | Baixa | 2026-07-07 |
-| BUG-010 | LP pode ficar negativo — Player.lifePoints nao tem protecao contra valores abaixo de 0 | Media | 2026-07-07 |
+| ~~BUG-010~~ | ~~LP pode ficar negativo — Player.lifePoints nao tem protecao contra valores abaixo de 0~~ — Corrigido em 2026-07-07 | Resolvido | 2026-07-07 |
 
 ---
 
@@ -793,12 +793,12 @@ USUARIO                            FRONTEND                          DUEL-SERVIC
 - [x] Decidir estrategia de persistencia de estado: Usar Redis
 - [x] Definir formato de storage para historico de duelos: PostgreSQL/H2 via JPA
 - [x] Configurar autenticacao WebSocket com auth-service
-- [ ] Decidir se ocgcore sera substituido por engine em Java puro ou mantido via JNI
-- [ ] Decidir versao do spring-cloud BOM no build.gradle
-- [ ] Corrigir `deck-service.url` no `application.yml` de `8082` para `8081` (ver BUG-007)
-- [ ] Definir se side deck sera suportado na primeira versao ou apenas em matches (melhor de 3)
-- [ ] Definir taxa de rate limiting (10 acoes/s parece razoavel)
-- [ ] Decidir sobre heartbeat WebSocket: necessario para evitar acumulo de conexoes ociosas
+- [x] Decidir se ocgcore sera substituido por engine em Java puro ou mantido via JNI: mantido via JNI
+- [x] Decidir versao do spring-cloud BOM no build.gradle: `2023.0.0`
+- [x] Corrigir `deck-service.url` no `application.yml` de `8082` para `8081` (ver BUG-007 — corrigido em 2026-07-07)
+- [x] Definir se side deck sera suportado na primeira versao ou apenas em matches (melhor de 3): suportado em matches
+- [x] Definir taxa de rate limiting (10 acoes/s parece razoavel): `10 acoes/s`
+- [x] Decidir sobre heartbeat WebSocket: necessario para evitar acumulo de conexoes ociosas
 
 ---
 

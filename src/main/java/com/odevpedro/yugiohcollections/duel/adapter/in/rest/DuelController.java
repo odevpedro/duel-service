@@ -6,8 +6,9 @@ import com.odevpedro.yugiohcollections.duel.application.dto.history.DuelHistoryR
 import com.odevpedro.yugiohcollections.duel.application.mapper.DuelHistoryMapper;
 import com.odevpedro.yugiohcollections.duel.application.mapper.DuelMapper;
 import com.odevpedro.yugiohcollections.duel.application.service.DuelApplicationService;
-import com.odevpedro.yugiohcollections.duel.adapter.out.persistence.repository.DuelHistoryRepository;
 import com.odevpedro.yugiohcollections.duel.domain.model.DuelState;
+import com.odevpedro.yugiohcollections.duel.adapter.out.persistence.repository.DuelHistoryRepository;
+import com.odevpedro.yugiohcollections.duel.domain.port.DuelEventPublisherPort;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ public class DuelController {
     private final DuelMapper mapper;
     private final DuelHistoryRepository historyRepository;
     private final DuelHistoryMapper historyMapper;
+    private final DuelEventPublisherPort publisher;
 
     @PostMapping
     public ResponseEntity<DuelResponse> createDuel(@Valid @RequestBody CreateDuelRequest request) {
@@ -39,6 +41,13 @@ public class DuelController {
     @GetMapping("/{duelId}/state")
     public ResponseEntity<DuelState> getDuelState(@PathVariable String duelId) {
         return ResponseEntity.ok(duelService.findById(duelId));
+    }
+
+    @PostMapping("/{duelId}/resync")
+    public ResponseEntity<DuelResponse> resyncDuel(@PathVariable String duelId) {
+        DuelState state = duelService.findById(duelId);
+        publisher.publishStateUpdate(duelId, state);
+        return ResponseEntity.ok(mapper.toResponse(state));
     }
 
     @GetMapping("/{duelId}/history")

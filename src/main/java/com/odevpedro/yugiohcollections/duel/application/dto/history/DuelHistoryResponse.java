@@ -16,12 +16,15 @@ public class DuelHistoryResponse {
     private String duelId;
     private String playerAId;
     private String playerBId;
+    private Long playerADeckId;
+    private Long playerBDeckId;
     private String winnerId;
     private String loserId;
     private Integer playerAFinalLp;
     private Integer playerBFinalLp;
     private Integer turnCount;
     private String duelType;
+    private String victoryType;
     private String result;
     private LocalDateTime startedAt;
     private LocalDateTime finishedAt;

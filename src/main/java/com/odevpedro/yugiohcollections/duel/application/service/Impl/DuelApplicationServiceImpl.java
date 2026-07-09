@@ -17,6 +17,11 @@ import com.odevpedro.yugiohcollections.duel.domain.model.enums.ZoneType;
 import com.odevpedro.yugiohcollections.duel.domain.port.DuelRepositoryPort;
 import com.odevpedro.yugiohcollections.duel.adapter.out.persistence.repository.DuelHistoryRepository;
 import com.odevpedro.yugiohcollections.duel.adapter.out.external.DeckFeignClient;
+import com.odevpedro.yugiohcollections.duel.adapter.out.external.DeckViewResponse;
+import com.odevpedro.yugiohcollections.duel.adapter.out.external.DeckCardSummaryDTO;
+import com.odevpedro.yugiohcollections.duel.adapter.out.messaging.DuelLifecycleKafkaPublisher;
+import com.odevpedro.yugiohcollections.duel.domain.exception.InvalidDeckException;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -26,9 +31,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -38,12 +43,15 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
     private static final int INITIAL_LIFE_POINTS = 8000;
     private static final int INITIAL_HAND_SIZE = 5;
     private static final int DEMO_DECK_SIZE = 40;
+    private static final String DEFAULT_DUEL_TYPE = "CASUAL";
 
     private final DuelRepositoryPort repository;
     private final DuelHistoryRepository historyRepository;
     private final DeckFeignClient deckFeignClient;
+    private final DuelLifecycleKafkaPublisher lifecyclePublisher;
     private final DuelMapper mapper;
     private final DuelHistoryMapper historyMapper;
+    private final MeterRegistry meterRegistry;
 
     @Value("${duel.demo-deck.enabled:false}")
     private boolean demoDeckEnabled;
@@ -57,8 +65,11 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
                 .duelId(UUID.randomUUID().toString())
                 .playerAId(request.getPlayerAId())
                 .playerBId(request.getPlayerBId())
+                .playerADeckId(request.getPlayerADeckId())
+                .playerBDeckId(request.getPlayerBDeckId())
                 .playerA(playerA)
                 .playerB(playerB)
+                .duelType(request.getDuelType() != null ? request.getDuelType() : DEFAULT_DUEL_TYPE)
                 .currentPhase(Phase.DRAW)
                 .turnNumber(1)
                 .activePlayerId(request.getPlayerAId())
@@ -68,11 +79,15 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
                 .firstTurn(true)
                 .build();
 
-        return mapper.toResponse(repository.save(state));
+        DuelState saved = repository.save(state);
+        lifecyclePublisher.publishDuelStarted(saved);
+        meterRegistry.counter("duel.created").increment();
+        return mapper.toResponse(saved);
     }
 
     private Player initializePlayer(String playerId, Long deckId) {
-        List<Card> deck = loadDeckFromService(deckId);
+        LoadedDeck loadedDeck = loadDeckFromService(deckId);
+        List<Card> deck = loadedDeck.mainDeck();
         shuffleDeck(deck);
         List<Card> hand = drawCards(deck, INITIAL_HAND_SIZE);
 
@@ -81,6 +96,9 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
                 .lifePoints(INITIAL_LIFE_POINTS)
                 .deck(deck)
                 .hand(hand)
+                .extraDeck(loadedDeck.extraDeck())
+                .sideDeck(loadedDeck.sideDeck())
+                .banished(new ArrayList<>())
                 .monsterZones(createZones(ZoneType.MONSTER))
                 .spellTrapZones(createZones(ZoneType.SPELL_TRAP))
                 .build();
@@ -113,45 +131,44 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
         return drawn;
     }
 
-    private List<Card> loadDeckFromService(Long deckId) {
+    private LoadedDeck loadDeckFromService(Long deckId) {
         if (deckId == null) {
             if (demoDeckEnabled) {
                 log.warn("No deck provided, using demo deck");
                 return createDemoDeck();
             }
             log.warn("No deck provided, using empty deck");
-            return new ArrayList<>();
+            return new LoadedDeck(new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
         }
 
         try {
-            Map<String, Object> deckView = deckFeignClient.getDeck(deckId);
-            List<Map<String, Object>> deckCards = extractCards(deckView);
-            List<Card> cards = new ArrayList<>();
-            
-            for (Map<String, Object> cardData : deckCards) {
-                int quantity = extractQuantity(cardData);
-                for (int i = 0; i < quantity; i++) {
-                    Card card = Card.builder()
-                            .cardId(extractCardId(cardData))
-                            .name((String) cardData.get("name"))
-                            .atk(extractInt(cardData, 1000, "atk", "attack"))
-                            .def(extractInt(cardData, 1000, "def", "defense"))
-                            .level(extractInt(cardData, 4, "level"))
-                            .type(extractType(cardData.get("type")))
-                            .build();
-                    cards.add(card);
-                }
+            DeckViewResponse deckView = deckFeignClient.getDeck(deckId);
+            List<String> violations = new ArrayList<>();
+            if (deckView.getValidationErrors() != null) {
+                violations.addAll(deckView.getValidationErrors());
             }
-            
-            log.info("Loaded {} cards from deck {}", cards.size(), deckId);
-            return cards;
+            if (!deckView.isValid()) {
+                throw new InvalidDeckException(resolveViolations(deckView, violations));
+            }
+
+            LoadedDeck loaded = new LoadedDeck(
+                    expandCards(deckView.getMainDeckCards()),
+                    expandCards(deckView.getExtraDeckCards()),
+                    expandCards(deckView.getSideDeckCards())
+            );
+            log.info("Loaded {} main cards, {} extra cards and {} side cards from deck {}",
+                    loaded.mainDeck().size(), loaded.extraDeck().size(), loaded.sideDeck().size(), deckId);
+            return loaded;
         } catch (Exception e) {
             log.error("Failed to load deck from deck-service: {}", e.getMessage());
-            return demoDeckEnabled ? createDemoDeck() : new ArrayList<>();
+            if (e instanceof InvalidDeckException invalidDeckException) {
+                throw invalidDeckException;
+            }
+            throw new RuntimeException("Failed to load deck from deck-service", e);
         }
     }
 
-    private List<Card> createDemoDeck() {
+    private LoadedDeck createDemoDeck() {
         List<Card> cards = new ArrayList<>();
 
         for (int i = 1; i <= DEMO_DECK_SIZE; i++) {
@@ -162,6 +179,7 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
             cards.add(Card.builder()
                     .cardId("demo-" + i)
                     .name(type == CardType.MONSTER ? "Demo Monster " + i : "Demo " + type.name() + " " + i)
+                    .imageUrl(null)
                     .atk(type == CardType.MONSTER ? 900 + (i * 40) : 0)
                     .def(type == CardType.MONSTER ? 800 + (i * 35) : 0)
                     .level(type == CardType.MONSTER ? Math.min(8, 3 + (i % 5)) : 0)
@@ -169,56 +187,53 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
                     .build());
         }
 
-        return cards;
+        return new LoadedDeck(cards, new ArrayList<>(), new ArrayList<>());
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> extractCards(Map<String, Object> deckView) {
-        Object cards = deckView.get("cards");
-        if (cards instanceof List<?> cardList) {
-            return (List<Map<String, Object>>) cardList;
+    private List<String> resolveViolations(DeckViewResponse deckView, List<String> violations) {
+        List<String> resolved = new ArrayList<>(violations);
+        if (deckView.getMainDeckSize() < 40 || deckView.getMainDeckSize() > 60) {
+            resolved.add("Main deck must have 40-60 cards (current: " + deckView.getMainDeckSize() + ")");
         }
-        return List.of();
-    }
-
-    private String extractCardId(Map<String, Object> cardData) {
-        Object cardId = cardData.get("cardId");
-        if (cardId == null) {
-            cardId = cardData.get("id");
+        if (deckView.getExtraDeckSize() > 15) {
+            resolved.add("Extra deck must have at most 15 cards (current: " + deckView.getExtraDeckSize() + ")");
         }
-        return String.valueOf(cardId);
-    }
-
-    private int extractQuantity(Map<String, Object> cardData) {
-        Object quantity = cardData.get("quantity");
-        if (quantity instanceof Number number) {
-            return Math.max(1, number.intValue());
+        if (deckView.getSideDeckSize() > 15) {
+            resolved.add("Side deck must have at most 15 cards (current: " + deckView.getSideDeckSize() + ")");
         }
-        return 1;
+        return resolved;
     }
 
-    private int extractInt(Map<String, Object> cardData, int defaultValue, String... keys) {
-        for (String key : keys) {
-            Object value = cardData.get(key);
-            if (value instanceof Number number) {
-                return number.intValue();
-            }
-            if (value instanceof String text && !text.isBlank()) {
-                try {
-                    return Integer.parseInt(text);
-                } catch (NumberFormatException ignored) {
-                    // Keep checking fallback keys.
-                }
+    private List<Card> expandCards(List<DeckCardSummaryDTO> cards) {
+        List<Card> expanded = new ArrayList<>();
+        if (cards == null) {
+            return expanded;
+        }
+        for (DeckCardSummaryDTO cardData : cards) {
+            int quantity = cardData.getQuantity() != null ? Math.max(1, cardData.getQuantity()) : 1;
+            for (int i = 0; i < quantity; i++) {
+                expanded.add(Card.builder()
+                        .cardId(String.valueOf(cardData.getCardId()))
+                        .name(cardData.getName())
+                        .imageUrl(cardData.getImageUrl())
+                        .atk(valueOrZero(cardData.getAtk()))
+                        .def(valueOrZero(cardData.getDef()))
+                        .level(valueOrZero(cardData.getLevel()))
+                        .type(extractType(cardData.getType()))
+                        .build());
             }
         }
-        return defaultValue;
+        return expanded;
+    }
+
+    private int valueOrZero(Integer value) {
+        return value != null ? value : 0;
     }
 
     private CardType extractType(Object type) {
         if (type == null) {
             return CardType.MONSTER;
         }
-
         String normalized = String.valueOf(type).toUpperCase();
         if (normalized.contains("SPELL")) {
             return CardType.SPELL;
@@ -240,11 +255,16 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
         DuelState state = findById(duelId);
         state.setStatus(GameStatus.FINISHED);
         state.setWinnerId(winnerId);
+        state.setVictoryType(winnerId != null ? "NORMAL" : "DRAW");
         state.setUpdatedAt(LocalDateTime.now());
         
         var historyEntity = historyMapper.toEntity(state, winnerId);
         historyRepository.save(historyEntity);
         
         repository.save(state);
+        lifecyclePublisher.publishDuelFinished(state);
+        meterRegistry.counter("duel.finished").increment();
     }
+
+    private record LoadedDeck(List<Card> mainDeck, List<Card> extraDeck, List<Card> sideDeck) {}
 }

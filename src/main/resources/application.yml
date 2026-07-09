@@ -1,11 +1,19 @@
 server:
   port: 8084
+  shutdown: graceful
 
 spring:
   application:
     name: duel-service
   profiles:
     active: dev
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
   datasource:
     url: jdbc:h2:mem:dueldb
@@ -42,7 +50,26 @@ duel:
     ttl-hours: 24
   demo-deck:
     enabled: true
+  rate-limit:
+    actions-per-second: 10
 
 logging:
   level:
     com.odevpedro.yugiohcollections.duel: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} [%X{correlationId}] - %msg%n"
+
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,redis
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus

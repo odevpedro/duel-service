@@ -9,6 +9,7 @@ import lombok.Data;
 public class Card {
     private String cardId;
     private String name;
+    private String imageUrl;
     private int atk;
     private int def;
     private int level;

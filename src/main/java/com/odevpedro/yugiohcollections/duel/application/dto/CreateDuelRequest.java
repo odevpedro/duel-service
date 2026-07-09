@@ -15,4 +15,6 @@ public class CreateDuelRequest {
     private Long playerADeckId;
 
     private Long playerBDeckId;
+
+    private String duelType;
 }

@@ -24,6 +24,9 @@ class DuelHistoryMapperTest {
                 .duelId("duel-123")
                 .playerAId("player-a")
                 .playerBId("player-b")
+                .playerADeckId(10L)
+                .playerBDeckId(20L)
+                .duelType("RANKED")
                 .playerA(Player.builder().playerId("player-a").lifePoints(8000).build())
                 .playerB(Player.builder().playerId("player-b").lifePoints(0).build())
                 .turnNumber(5)
@@ -38,11 +41,15 @@ class DuelHistoryMapperTest {
         assertThat(entity.getDuelId()).isEqualTo("duel-123");
         assertThat(entity.getPlayerAId()).isEqualTo("player-a");
         assertThat(entity.getPlayerBId()).isEqualTo("player-b");
+        assertThat(entity.getPlayerADeckId()).isEqualTo(10L);
+        assertThat(entity.getPlayerBDeckId()).isEqualTo(20L);
         assertThat(entity.getWinnerId()).isEqualTo("player-a");
         assertThat(entity.getLoserId()).isEqualTo("player-b");
         assertThat(entity.getPlayerAFinalLp()).isEqualTo(8000);
         assertThat(entity.getPlayerBFinalLp()).isEqualTo(0);
         assertThat(entity.getTurnCount()).isEqualTo(5);
+        assertThat(entity.getDuelType()).isEqualTo("RANKED");
+        assertThat(entity.getVictoryType()).isEqualTo("NORMAL");
         assertThat(entity.getResult()).isEqualTo("COMPLETED");
         assertThat(entity.getDurationSeconds()).isGreaterThan(0);
     }
@@ -53,6 +60,8 @@ class DuelHistoryMapperTest {
                 .duelId("duel-456")
                 .playerAId("player-a")
                 .playerBId("player-b")
+                .playerADeckId(10L)
+                .playerBDeckId(20L)
                 .playerA(Player.builder().playerId("player-a").lifePoints(4000).build())
                 .playerB(Player.builder().playerId("player-b").lifePoints(4000).build())
                 .status(GameStatus.FINISHED)
@@ -74,11 +83,15 @@ class DuelHistoryMapperTest {
                 .duelId("duel-123")
                 .playerAId("player-a")
                 .playerBId("player-b")
+                .playerADeckId(10L)
+                .playerBDeckId(20L)
+                .duelType("CASUAL")
                 .winnerId("player-a")
                 .loserId("player-b")
                 .playerAFinalLp(8000)
                 .playerBFinalLp(0)
                 .turnCount(5)
+                .victoryType("NORMAL")
                 .result("COMPLETED")
                 .startedAt(now.minusMinutes(10))
                 .finishedAt(now)
@@ -89,10 +102,14 @@ class DuelHistoryMapperTest {
 
         assertThat(response.getDuelId()).isEqualTo("duel-123");
         assertThat(response.getWinnerId()).isEqualTo("player-a");
+        assertThat(response.getPlayerADeckId()).isEqualTo(10L);
+        assertThat(response.getPlayerBDeckId()).isEqualTo(20L);
         assertThat(response.getLoserId()).isEqualTo("player-b");
         assertThat(response.getPlayerAFinalLp()).isEqualTo(8000);
         assertThat(response.getPlayerBFinalLp()).isEqualTo(0);
         assertThat(response.getTurnCount()).isEqualTo(5);
+        assertThat(response.getDuelType()).isEqualTo("CASUAL");
+        assertThat(response.getVictoryType()).isEqualTo("NORMAL");
         assertThat(response.getResult()).isEqualTo("COMPLETED");
         assertThat(response.getDurationSeconds()).isEqualTo(600L);
     }

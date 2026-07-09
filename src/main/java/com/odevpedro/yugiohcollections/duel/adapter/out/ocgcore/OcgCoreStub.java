@@ -275,10 +275,13 @@ public class OcgCoreStub implements OcgCorePort {
             state.setStatus(GameStatus.FINISHED);
             if (state.getPlayerA().isAlive() && !state.getPlayerB().isAlive()) {
                 state.setWinnerId(state.getPlayerA().getPlayerId());
+                state.setVictoryType("NORMAL");
             } else if (!state.getPlayerA().isAlive() && state.getPlayerB().isAlive()) {
                 state.setWinnerId(state.getPlayerB().getPlayerId());
+                state.setVictoryType("NORMAL");
             } else {
                 log.info("[STUB] DRAW - both players defeated");
+                state.setVictoryType("DRAW");
             }
         }
     }

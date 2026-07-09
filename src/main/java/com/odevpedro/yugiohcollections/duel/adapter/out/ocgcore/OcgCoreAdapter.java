@@ -15,10 +15,14 @@ public class OcgCoreAdapter implements OcgCorePort {
 
     private final OcgCoreBridge bridge;
     private final ObjectMapper objectMapper;
+    private final OcgCoreStub fallback = new OcgCoreStub();
 
     @Override
     public DuelState processAction(DuelState state, DuelActionDTO action, String playerId) {
         try {
+            if (!OcgCoreLoader.isLoaded()) {
+                return fallback.processAction(state, action, playerId);
+            }
             String stateJson  = objectMapper.writeValueAsString(state);
             String actionJson = objectMapper.writeValueAsString(action);
 
@@ -34,6 +38,9 @@ public class OcgCoreAdapter implements OcgCorePort {
     @Override
     public DuelState advancePhase(DuelState state) {
         try {
+            if (!OcgCoreLoader.isLoaded()) {
+                return fallback.advancePhase(state);
+            }
             String stateJson  = objectMapper.writeValueAsString(state);
             String resultJson = bridge.advancePhase(stateJson);
             return objectMapper.readValue(resultJson, DuelState.class);
@@ -46,6 +53,9 @@ public class OcgCoreAdapter implements OcgCorePort {
     @Override
     public boolean isActionValid(DuelState state, DuelActionDTO action, String playerId) {
         try {
+            if (!OcgCoreLoader.isLoaded()) {
+                return fallback.isActionValid(state, action, playerId);
+            }
             String stateJson  = objectMapper.writeValueAsString(state);
             String actionJson = objectMapper.writeValueAsString(action);
             return bridge.isActionValid(stateJson, actionJson, playerId);

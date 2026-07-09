@@ -6,6 +6,7 @@ import com.odevpedro.yugiohcollections.duel.domain.model.DuelState;
 import com.odevpedro.yugiohcollections.duel.domain.port.DuelRepositoryPort;
 import com.odevpedro.yugiohcollections.duel.domain.port.OcgCorePort;
 import lombok.RequiredArgsConstructor;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -16,6 +17,7 @@ public class ActionServiceImpl implements ActionService {
 
     private final OcgCorePort ocgCore;
     private final DuelRepositoryPort repository;
+    private final MeterRegistry meterRegistry;
 
     @Override
     public DuelState process(DuelActionDTO action, String playerId) {
@@ -29,6 +31,7 @@ public class ActionServiceImpl implements ActionService {
 
         DuelState updated = ocgCore.processAction(state, action, playerId);
         updated.setUpdatedAt(LocalDateTime.now());
+        meterRegistry.counter("duel.actions.processed").increment();
 
         return repository.save(updated);
     }

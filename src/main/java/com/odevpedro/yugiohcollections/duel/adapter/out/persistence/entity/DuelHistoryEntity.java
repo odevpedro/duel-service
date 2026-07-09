@@ -29,6 +29,12 @@ public class DuelHistoryEntity {
     @Column(name = "player_b_id", nullable = false)
     private String playerBId;
 
+    @Column(name = "player_a_deck_id")
+    private Long playerADeckId;
+
+    @Column(name = "player_b_deck_id")
+    private Long playerBDeckId;
+
     @Column(name = "winner_id")
     private String winnerId;
 
@@ -46,6 +52,9 @@ public class DuelHistoryEntity {
 
     @Column(name = "duel_type")
     private String duelType;
+
+    @Column(name = "victory_type")
+    private String victoryType;
 
     @Column(name = "result")
     private String result;

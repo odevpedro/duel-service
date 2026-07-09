@@ -6,6 +6,8 @@ import com.odevpedro.yugiohcollections.duel.application.service.DuelApplicationS
 import com.odevpedro.yugiohcollections.duel.application.mapper.DuelMapper;
 import com.odevpedro.yugiohcollections.duel.adapter.out.persistence.entity.DuelHistoryEntity;
 import com.odevpedro.yugiohcollections.duel.adapter.out.persistence.repository.DuelHistoryRepository;
+import com.odevpedro.yugiohcollections.duel.domain.port.DuelEventPublisherPort;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -39,12 +41,19 @@ class DuelControllerHistoryTest {
     @MockBean
     private DuelHistoryMapper historyMapper;
 
+    @MockBean
+    private DuelEventPublisherPort publisher;
+
+    @MockBean
+    private MeterRegistry meterRegistry;
+
     @Test
     void shouldReturnDuelHistory() throws Exception {
         DuelHistoryEntity entity = DuelHistoryEntity.builder()
                 .duelId("duel-123")
                 .playerAId("player-a")
                 .playerBId("player-b")
+                .duelType("CASUAL")
                 .winnerId("player-a")
                 .loserId("player-b")
                 .turnCount(5)
@@ -58,6 +67,7 @@ class DuelControllerHistoryTest {
                 .duelId("duel-123")
                 .playerAId("player-a")
                 .playerBId("player-b")
+                .duelType("CASUAL")
                 .winnerId("player-a")
                 .loserId("player-b")
                 .turnCount(5)
@@ -87,6 +97,7 @@ class DuelControllerHistoryTest {
                 .duelId("duel-123")
                 .playerAId("player-a")
                 .playerBId("player-b")
+                .duelType("CASUAL")
                 .winnerId("player-a")
                 .result("COMPLETED")
                 .finishedAt(LocalDateTime.now())
@@ -94,6 +105,7 @@ class DuelControllerHistoryTest {
 
         DuelHistoryResponse response = DuelHistoryResponse.builder()
                 .duelId("duel-123")
+                .duelType("CASUAL")
                 .winnerId("player-a")
                 .result("COMPLETED")
                 .build();

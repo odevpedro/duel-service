@@ -22,6 +22,15 @@ public class Player {
     private List<Card> graveyard = new ArrayList<>();
 
     @Builder.Default
+    private List<Card> banished = new ArrayList<>();
+
+    @Builder.Default
+    private List<Card> extraDeck = new ArrayList<>();
+
+    @Builder.Default
+    private List<Card> sideDeck = new ArrayList<>();
+
+    @Builder.Default
     private List<Zone> monsterZones = new ArrayList<>();
 
     @Builder.Default

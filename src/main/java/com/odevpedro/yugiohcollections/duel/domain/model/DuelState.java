@@ -13,6 +13,8 @@ public class DuelState {
     private String duelId;
     private String playerAId;
     private String playerBId;
+    private Long playerADeckId;
+    private Long playerBDeckId;
     private Phase currentPhase;
     private int turnNumber;
     private String activePlayerId;
@@ -20,12 +22,15 @@ public class DuelState {
     private Player playerB;
     private GameStatus status;
     private String winnerId;
+    private String victoryType;
+    private String duelType;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private boolean firstTurn;
 
     private String disconnectedPlayerId;
     private LocalDateTime disconnectedAt;
+    private long version;
 
     public Player getOpponent(String playerId) {
         return playerA.getPlayerId().equals(playerId) ? playerB : playerA;
