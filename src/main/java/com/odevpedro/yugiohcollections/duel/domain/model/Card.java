@@ -14,4 +14,5 @@ public class Card {
     private int def;
     private int level;
     private CardType type;
+    private long code;
 }

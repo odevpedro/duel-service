@@ -1,11 +1,13 @@
 # Data Model — duel-service
 
 > Documentacao do modelo de dados do duel-service.
-> Ultima atualizacao: 2026-07-09
+> Ultima atualizacao: 2026-07-09 — field sync (NATIVE-009), desenho mao pelo C++ (NATIVE-010)
 
 ---
 
 ## Indice
+
+> Atualizado em: 2026-07-09 — field sync (NATIVE-009), desenho mao pelo C++ (NATIVE-010)
 
 - [Entidades](#entidades)
   - [DuelState](#duelstate)
@@ -244,6 +246,38 @@ DuelHistoryEntity (tabela relacional, independente)
 ---
 
 ## DTOs
+
+### OcgCoreBridgeResponse
+
+DTO para parsear a resposta JSON do bridge JNI C++. Usado por `OcgCoreAdapter.applyEngineResult()` para mesclar o resultado do motor no `DuelState`.
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| duelId | String | ID do duelo (ecoado do estado de entrada) |
+| turnNumber | int | Numero do turno processado |
+| currentPhase | String | Fase atual como string ("MAIN_1", "BATTLE", etc.) |
+| status | String | Status ("IN_PROGRESS" ou "FINISHED") |
+| engine | EngineResult | Resultado interno do motor C++ (ver abaixo) |
+
+### EngineResult (inner class de OcgCoreBridgeResponse)
+
+Resultado processado pelo motor ygopro-core. Extraido do bloco `engine` da resposta JSON do bridge.
+
+| Campo | Tipo | Descricao |
+|-------|------|-----------|
+| turn | int | Turno atual (vindo de `MSG_NEW_TURN`) |
+| phase | int | Codigo numerico da fase (0x01=DRAW, 0x02=STANDBY, 0x04=MAIN_1, 0x08=BATTLE_START, 0x10=BATTLE_STEP, 0x20=DAMAGE, 0x40=DAMAGE_CAL, 0x80=BATTLE, 0x100=MAIN_2, 0x200=END) |
+| turnPlayer | int | Indice do jogador ativo (0 ou 1) |
+| lp0 | int | LP do jogador 0 |
+| lp1 | int | LP do jogador 1 |
+| gameOver | boolean | Se o duelo terminou (recebeu `MSG_WIN` ou `MSG_RETRY`) |
+| winnerPlayer | int | Indice do vencedor (0 ou 1, 0 se empate) |
+| winReason | int | Razao da vitoria (1=NORMAL) |
+| field | Object | Objeto JSON do field data (zonas, cadeia) via `OCG_DuelQueryField` |
+
+**Arquivo:** `src/main/java/com/odevpedro/yugiohcollections/duel/adapter/out/ocgcore/OcgCoreBridgeResponse.java`
+
+---
 
 ### CreateDuelRequest
 

@@ -2,7 +2,9 @@ package com.odevpedro.yugiohcollections.duel.adapter.out.ocgcore;
 
 /**
  * Declarações dos métodos nativos que mapeiam para o ocgcore C++.
- * A implementação real está em ocgcore.dll (Windows) / ocgcore.so (Linux).
+ * A implementação está em native/ocgcore-bridge/ (libocgcore.so).
+ *
+ * O carregamento da biblioteca é feito pelo OcgCoreLoader no startup.
  *
  * Contrato com o C++:
  *   - processAction  recebe o estado serializado em JSON + ação, devolve novo estado JSON
@@ -10,10 +12,6 @@ package com.odevpedro.yugiohcollections.duel.adapter.out.ocgcore;
  *   - isActionValid  recebe estado + ação, devolve boolean
  */
 public class OcgCoreBridge {
-
-    static {
-        // carregado pelo OcgCoreLoader no startup — não chamar System.load aqui
-    }
 
     public native String processAction(String stateJson, String actionJson, String playerId);
 

@@ -1,6 +1,6 @@
 # Native Library
 
-Place the compiled ocgcore binary here before building the JAR.
+Place the compiled ocgcore JNI bridge binary here before building the JAR.
 
 | OS      | File                  |
 |---------|-----------------------|
@@ -8,18 +8,34 @@ Place the compiled ocgcore binary here before building the JAR.
 | Linux   | libocgcore.so         |
 | macOS   | libocgcore.dylib      |
 
-## Building ocgcore
+## Building the JNI bridge (automatic)
 
 ```bash
-git clone https://github.com/edo9300/ygopro-core
-cd ygopro-core
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build .
+./gradlew fullBuildNative
 ```
 
-Copy the output to this directory, then run:
+This configures CMake, fetches ygopro-core, compiles the bridge and copies
+the output to this directory.
+
+## Building the JNI bridge (manual)
+
+```bash
+cd native/ocgcore-bridge
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+cp build/libocgcore.so ../../src/main/resources/native/
+```
+
+## Building the JAR with native support
+
+Once the .so/.dylib/.dll is in this directory:
 
 ```bash
 ./gradlew bootJar
+```
+
+Or run the full pipeline:
+
+```bash
+./gradlew fullBuildNative bootJar
 ```

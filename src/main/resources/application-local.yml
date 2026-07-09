@@ -1,0 +1,20 @@
+spring:
+  kafka:
+    bootstrap-servers: localhost:19092
+    producer:
+      acks: 0
+      properties:
+        max.block.ms: 100
+        retries: 0
+        metadata.max.age.ms: 100
+
+management:
+  endpoint:
+    health:
+      group:
+        readiness:
+          include: livenessState
+
+logging:
+  level:
+    com.odevpedro.yugiohcollections.duel: DEBUG

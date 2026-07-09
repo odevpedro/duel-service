@@ -41,7 +41,7 @@ import java.util.Map;
 public class DuelApplicationServiceImpl implements DuelApplicationService {
 
     private static final int INITIAL_LIFE_POINTS = 8000;
-    private static final int INITIAL_HAND_SIZE = 5;
+    private static final int INITIAL_HAND_SIZE = 0;
     private static final int DEMO_DECK_SIZE = 40;
     private static final String DEFAULT_DUEL_TYPE = "CASUAL";
 
@@ -89,13 +89,12 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
         LoadedDeck loadedDeck = loadDeckFromService(deckId);
         List<Card> deck = loadedDeck.mainDeck();
         shuffleDeck(deck);
-        List<Card> hand = drawCards(deck, INITIAL_HAND_SIZE);
 
         return Player.builder()
                 .playerId(playerId)
                 .lifePoints(INITIAL_LIFE_POINTS)
                 .deck(deck)
-                .hand(hand)
+                .hand(new ArrayList<>())
                 .extraDeck(loadedDeck.extraDeck())
                 .sideDeck(loadedDeck.sideDeck())
                 .banished(new ArrayList<>())
@@ -176,6 +175,7 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
                     ? CardType.TRAP
                     : i % 5 == 0 ? CardType.SPELL : CardType.MONSTER;
 
+            long cardCode = type == CardType.MONSTER ? 89631139L + i : 0L;
             cards.add(Card.builder()
                     .cardId("demo-" + i)
                     .name(type == CardType.MONSTER ? "Demo Monster " + i : "Demo " + type.name() + " " + i)
@@ -184,6 +184,7 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
                     .def(type == CardType.MONSTER ? 800 + (i * 35) : 0)
                     .level(type == CardType.MONSTER ? Math.min(8, 3 + (i % 5)) : 0)
                     .type(type)
+                    .code(cardCode)
                     .build());
         }
 
@@ -212,14 +213,16 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
         for (DeckCardSummaryDTO cardData : cards) {
             int quantity = cardData.getQuantity() != null ? Math.max(1, cardData.getQuantity()) : 1;
             for (int i = 0; i < quantity; i++) {
+                long cardCode = cardData.getCardId() != null ? cardData.getCardId() : 0L;
                 expanded.add(Card.builder()
-                        .cardId(String.valueOf(cardData.getCardId()))
+                        .cardId(String.valueOf(cardCode))
                         .name(cardData.getName())
                         .imageUrl(cardData.getImageUrl())
                         .atk(valueOrZero(cardData.getAtk()))
                         .def(valueOrZero(cardData.getDef()))
                         .level(valueOrZero(cardData.getLevel()))
                         .type(extractType(cardData.getType()))
+                        .code(cardCode)
                         .build());
             }
         }

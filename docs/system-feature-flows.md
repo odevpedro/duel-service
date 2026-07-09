@@ -2,6 +2,7 @@
 
 > Registro histórico e incremental dos fluxos internos de cada funcionalidade.
 > Este documento cresce a cada nova feature implementada e **nunca tem seções removidas**.
+> Ultima atualizacao: 2026-07-09 — sincronizacao field_data (NATIVE-009), desenho mao pelo C++ (NATIVE-010)
 
 ---
 
@@ -16,6 +17,7 @@
 - [Feature: Persistência com Redis](#feature-persistência-com-redis)
 - [Feature: Sistema de Ações](#feature-sistema-de-ações)
 - [Feature: Gerenciamento de Fases](#feature-gerenciamento-de-fases)
+- [Feature: Integração Nativa ocgcore (JNI Bridge)](#feature-integração-nativa-ocgcore-jni-bridge)
 
 ---
 
@@ -264,7 +266,7 @@ Permite conexão WebSocket para comunicação bidirecional em tempo real entre o
 
 - **Tipo:** WebSocket STOMP
 - **Arquivo:** `src/main/java/com/odevpedro/yugiohcollections/duel/adapter/in/websocket/config/WebSocketConfig.java`
-- **Endpoint:** `ws://localhost:8084/ws`
+- **Endpoint:** `ws://localhost:8084/ws` (SockJS) ou `ws://localhost:8084/ws-raw` (raw WebSocket sem SockJS)
 - **Autenticação:** JWT obrigatória (via sub-protocol ou query param)
 
 **Subscribing:**
@@ -850,6 +852,221 @@ duel:
 
 ---
 
+# Feature: Integração Nativa ocgcore (JNI Bridge)
+
+> **Versão:** 1.0.0
+> **Implementada em:** 2026-07-09
+> **Status:** Concluída
+
+---
+
+## Resumo
+
+Conecta o motor C++ ygopro-core ao Java via JNI, permitindo que o processamento real do jogo seja delegado à biblioteca nativa em vez do stub Java.
+
+**Motivação:** O stub Java (`OcgCoreStub`) implementa regras simplificadas e não cobre todas as mecânicas do Yu-Gi-Oh!. O ygopro-core é o motor de referência.
+**Resultado:** Bridge JNI funcional que carrega ygopro-core em runtime e expõe `processAction`, `advancePhase` e `isActionValid`.
+
+---
+
+## Arquitetura de Integração
+
+```
+┌──────────────────────┐
+│   OcgCoreAdapter     │  ←── Porta de domínio (OcgCorePort)
+│   (Java/Spring)      │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│   OcgCoreBridge      │  ←── Declarações `native`
+│   (Java)             │
+└──────────┬───────────┘
+           │ JNI
+           ▼
+┌──────────────────────┐
+│   libocgcore.so      │  ←── native/ocgcore-bridge/
+│   (C++ JNI Bridge)   │      (compilado via CMake)
+└──────────┬───────────┘
+           │ C API (ocgcore_bridge_api.h)
+           ▼
+┌──────────────────────┐
+│   ygopro-core         │  ←── edo9300/ygopro-core
+│   (C++ Game Engine)   │      (via CMake FetchContent)
+└──────────────────────┘
+```
+
+---
+
+## Fluxo Principal
+
+### 1. Startup — Carregamento da Lib Nativa
+
+- **Arquivo:** `OcgCoreLoader.java`
+- **Perfil ativo:** `!dev` (produção)
+- **Mecanismo:** `@PostConstruct` → extrai `.so` do classpath → `System.load()`
+
+```
+Spring Boot startup
+    ↓
+OcgCoreLoader.load()
+    ├── Recurso /native/libocgcore.so existe? ── Não → loaded=false, log warning
+    │                                               → OcgCoreAdapter usa fallback
+    └── Sim → copia para /tmp → System.load()
+                ├── Sucesso → loaded=true, log info
+                └── Falha → loaded=false, log warn, fallback
+```
+
+### 2. Runtime — Processamento de Ação
+
+O bridge C++ mantém um mapa global (`g_active_duels`) de instâncias `OCG_Duel` indexadas por `duelId`. Na primeira chamada, o duelo é criado e armazenado. Chamadas subsequentes reutilizam a instância, evitando recriação.
+
+```
+OcgCoreAdapter.processAction(state, action, playerId)
+    ├── OcgCoreLoader.isLoaded() == false
+    │   → delega para OcgCoreStub.processAction()
+    │
+    └── OcgCoreLoader.isLoaded() == true
+        → OcgCoreBridge.processAction(stateJson, actionJson, playerId)
+            │
+            │ JNI
+            ▼
+        libocgcore.so::Java_..._processAction(env, self, state, action, player)
+            → converte jstring → const char*
+            → [primeira vez] ocgcore_bridge_create(state) + OCG_StartDuel
+            → [reentrada]   recupera OCG_Duel* do mapa g_active_duels[duelId]
+            → run_engine(duel)  ← processa ate SELECT + responde + NEW_PHASE
+            → [se game_over]   destroy e remove do mapa
+            → converte resultado → jstring
+            → retorna para Java
+            │
+            ▼
+        OcgCoreAdapter: objectMapper.readValue(resultJson, OcgCoreBridgeResponse.class)
+```
+
+O fluxo de `run_engine()`:
+
+1. `OCG_DuelProcess(duel)` — processa um step do motor
+2. `OCG_DuelGetMessage(duel, &len)` — le buffer de mensagens
+3. Para cada mensagem no buffer `[size][data]`:
+   - `MSG_NEW_TURN` → incrementa `r.turn`, registra `turnPlayer`
+   - `MSG_NEW_PHASE` → atualiza `r.phase`
+   - `MSG_SELECT_*` → `build_response()` + `OCG_DuelSetResponse()`
+   - `MSG_WIN` → game over, retorna
+4. Após responder (`responded > 0`) e ver `MSG_NEW_PHASE`, sai do loop
+5. `OCG_DuelQueryField(duel, &flen)` — snapshot do campo para field data
+
+**Alterações importantes de constantes ygopro-core:**
+- `PHASE_END` mudou de `0x20` para `0x200`
+- `PHASE_MAIN2` mudou de `0x10` para `0x100`
+- `PHASE_BATTLE` mudou de `0x08` para `0x80`
+- Novas fases: `PHASE_BATTLE_START=0x08`, `PHASE_BATTLE_STEP=0x10`, `PHASE_DAMAGE=0x20`, `PHASE_DAMAGE_CAL=0x40`
+- O Java `OcgCoreAdapter.mapPhase()` foi atualizado com os novos valores
+
+
+### 3. Build da Lib Nativa
+
+- **Trigger:** `./gradlew fullBuildNative`
+- **Pipeline:**
+
+```
+configureNative (cmake -B build)
+    ↓
+buildNative (cmake --build build)
+    ↓
+copyNativeLib (copia .so → src/main/resources/native/)
+```
+
+O CMakeLists.txt usa `FetchContent` para baixar e compilar o ygopro-core como biblioteca estática, linkando-o ao bridge JNI.
+
+---
+
+### Nova Arquitetura de Build (CMake com Lua + ygopro-core)
+
+O `CMakeLists.txt` foi reescrito para baixar e compilar três dependências via FetchContent:
+
+| Dependência | Versão | Tipo | Função |
+|-------------|--------|------|--------|
+| Lua 5.4 | `v5.4.7` | Static lib (`lua54`) | Script reader do ygopro-core |
+| ygopro-core | `master` | Static lib (`ocgcore-core`) | Motor C++ do duelo |
+| nlohmann_json | `v3.11.3` | Header-only | Serialização JSON no bridge C++ |
+
+O build produz `libocgcore.so` (~2,9 MB) diretamente em `src/main/resources/native/`.
+
+### Fluxo de processamento via OcgCoreBridgeResponse
+
+O bridge C++ retorna um JSON contendo um bloco `engine` com os resultados processados. O Java agora parseia essa resposta como `OcgCoreBridgeResponse` (DTO) e usa `applyEngineResult()` para mesclar os dados no `DuelState`:
+
+1. `OcgCoreAdapter.processAction()` serializa `DuelState` + `DuelActionDTO` em JSON
+2. Chama `OcgCoreBridge.processAction()` via JNI
+3. Parseia o JSON de retorno como `OcgCoreBridgeResponse`
+4. `applyEngineResult()` extrai do `EngineResult`: turn, phase, lp0, lp1, turnPlayer, gameOver, winnerPlayer, winReason e field data
+5. Atualiza `DuelState` com os valores extraídos (turnNumber, currentPhase, lifePoints, activePlayerId, status, winnerId, victoryType)
+
+### Estrutura JSON retornada pelo bridge
+
+```json
+{
+  "duelId": "duel-abc-123",
+  "turnNumber": 1,
+  "currentPhase": "END",
+  "status": "IN_PROGRESS",
+  "engine": {
+    "turn": 1,
+    "phase": 512,
+    "turnPlayer": 0,
+    "lp0": 8000,
+    "lp1": 8000,
+    "gameOver": false,
+    "winnerPlayer": 0,
+    "winReason": 0,
+    "field": { "duelOptions": 1, "players": [...], "chain": [] }
+  }
+}
+```
+
+> `engine.phase` usa os codigos do ygopro-core atual: `0x01`=DRAW, `0x02`=STANDBY, `0x04`=MAIN_1, `0x80`=BATTLE, `0x100`=MAIN_2, `0x200`=END. O campo `engine.field` agora é um objeto JSON (nao string), parseado como `Object` no Java DTO.
+
+---
+
+## Configuração
+
+| Propriedade | Descrição | Default |
+|-------------|-----------|---------|
+| `spring.profiles.active` | Se `dev`, o OcgCoreLoader não carrega e o Stub é usado | `dev` |
+| `LD_LIBRARY_PATH` | Caminho para libs nativas no container | `/app/native/` |
+
+---
+
+## Fallback
+
+| Cenário | Comportamento | Arquivo |
+|---------|---------------|---------|
+| `.so` não encontrado no classpath | loaded=false → Stub | `OcgCoreLoader.java:28-33` |
+| `System.load()` lança exceção | loaded=false → Stub | `OcgCoreLoader.java:42-45` |
+| `.so` carregado mas ygopro-core falha | Exceção propagada como RuntimeException | `OcgCoreAdapter.java:33-35` |
+| Perfil `dev` ativo | OcgCoreLoader não é criado | `@Profile("!dev")` |
+| Bridge JNI lança exceção | Capturado, log, fallback para Stub (isActionValid) | `OcgCoreAdapter.java:62-65` |
+
+---
+
+## Classes e Arquivos
+
+| Classe / Arquivo | Caminho | Descrição |
+|------------------|---------|-----------|
+| OcgCorePort | `domain/port/` | Interface de domínio |
+| OcgCoreBridge | `adapter/out/ocgcore/` | Declarações native |
+| OcgCoreBridgeResponse | `adapter/out/ocgcore/` | DTO com EngineResult inner class para resposta do bridge |
+| OcgCoreAdapter | `adapter/out/ocgcore/` | Implementa port, gerencia fallback, usa applyEngineResult() |
+| OcgCoreLoader | `adapter/out/ocgcore/` | Carrega .so em runtime |
+| OcgCoreStub | `adapter/out/ocgcore/` | Fallback Java puro |
+| OcgCoreConfig | `config/` | Bean do bridge |
+| ocgcore_bridge.cpp | `native/ocgcore-bridge/src/` | Bridge JNI C++ (compila contra ygopro-core real) |
+| ocgcore_bridge_api.h | `native/ocgcore-bridge/include/` | API esperada do ygopro-core |
+| CMakeLists.txt | `native/ocgcore-bridge/` | Build CMake (FetchContent: Lua 5.4 + ygopro-core + nlohmann_json) |
+
+---
+
 # Feature: Persistência com Redis
 
 > **Versão:** 1.0.0
@@ -909,3 +1126,132 @@ duel:
 - **Key:** `duel:{duelId}`
 - **Value:** JSON serializado do DuelState
 - **TTL:** 24 horas (configurável)
+
+---
+
+# Feature: Sincronizacao de Posicoes via Field Data
+
+> **Versao:** 1.0.0
+> **Implementada em:** 2026-07-09
+> **Status:** Concluida
+
+---
+
+## Resumo
+
+Sincroniza as posicoes das cartas no `DuelState` Java com os dados do campo retornados pelo `OCG_DuelQueryField` do motor C++ apos cada processamento. Garante que o estado Java reflita fielmente o estado interno do ygopro-core apos cada acao ou avancode fase.
+
+**Motivacao:** O estado Java permanecia com as posicoes iniciais e nao refletia as mudancas internas do motor C++ (cartas movidas para GY, posicoes alteradas, contagens de deck/hand).
+**Resultado:** O `DuelState` Java e atualizado com as posicoes reais do campo a cada chamada ao bridge.
+
+---
+
+## Fluxo Principal
+
+### 1. Origem dos Dados
+
+O bridge C++ (`ocgcore_bridge.cpp`) ja retorna `field_data` no `EngineResult`, populado por `OCG_DuelQueryField()`. O campo contem um JSON com a estrutura:
+
+```json
+{
+  "duelOptions": 1,
+  "players": [
+    {
+      "lp": 8000,
+      "monsterZones": [{"present": true, "position": 1, "xyzCount": 0}, ...],
+      "spellTrapZones": [{"present": false, "position": 0, "xyzCount": 0}, ...],
+      "deckCount": 35,
+      "handCount": 5,
+      "graveCount": 1,
+      "removedCount": 0,
+      "extraCount": 15,
+      "extraPCount": 0
+    },
+    { ... }
+  ],
+  "chain": []
+}
+```
+
+### 2. Processamento Java
+
+- **Arquivo:** `src/main/java/com/odevpedro/yugiohcollections/duel/adapter/out/ocgcore/OcgCoreAdapter.java`
+- **Metodo:** `syncFieldPositions()`
+
+O fluxo de sincronizacao:
+
+```
+applyEngineResult(state, resp)
+    ├── Atualiza turnNumber, phase, LP, activePlayerId, status
+    ├── syncFieldPositions(state, engine.getField())
+    │       ├── Extrai "players" array do JSON field
+    │       ├── Para cada jogador (0 = playerA, 1 = playerB):
+    │       │   ├── syncZoneList(monsterZones, field["monsterZones"])
+    │       │   │   └── Se "present": false → z.setCard(null)
+    │       │   │       Se "present": true → z.setPosition(mapPosition(pos))
+    │       │   ├── syncZoneList(spellTrapZones, field["spellTrapZones"])
+    │       │   ├── trimList(deck, deckCount)
+    │       │   ├── trimList(hand, handCount)
+    │       │   ├── trimList(graveyard, graveCount)
+    │       │   └── trimList(banished, removedCount)
+    │       └── (campos extraCount/extraPCount sao informacionais)
+    └── state atualizado pronto para broadcast
+```
+
+### 3. Mapeamento de Posicoes
+
+| Codigo C++ | Significado | CardPosition Java |
+|---|---|---|
+| `0x1` (POS_FACEUP_ATTACK) | Ataque face-up | `ATTACK` |
+| `0x2` (POS_FACEDOWN_DEFENSE) | Defesa face-down | `DEFENSE_FACE_DOWN` |
+| `0x4` (POS_FACEUP_DEFENSE) | Defesa face-up | `DEFENSE_FACE_UP` |
+
+**Arquivo:** `OcgCoreAdapter.mapCardPosition()`
+
+---
+
+## Classes Envolvidas
+
+| Classe | Arquivo | Descricao |
+|--------|---------|-----------|
+| OcgCoreAdapter | `adapter/out/ocgcore/OcgCoreAdapter.java` | `syncFieldPositions()`, `syncZoneList()`, `mapCardPosition()`, `trimList()` |
+| OcgCoreBridgeResponse | `adapter/out/ocgcore/OcgCoreBridgeResponse.java` | DTO com `EngineResult.field` como Object |
+| ocgcore_bridge.cpp | `native/ocgcore-bridge/src/` | `run_engine()` extrai field via `OCG_DuelQueryField` |
+
+---
+
+## Field Data
+
+`OCG_DuelQueryField` retorna um buffer binario com o seguinte layout (por jogador):
+
+| Offset | Campo | Tipo | Descricao |
+|--------|-------|------|-----------|
+| 0-3 | duelOptions | uint32 | Opcoes do duelo |
+| 4-7 | lp | int32 | LP do jogador 0 |
+| 8-12 | monsterZone[0] | uint8 + uint8 + uint32 | present + position + xyzCount |
+| ... | monsterZone[1..4] | ... | 5 zonas de monstro |
+| ... | spellTrapZone[0..4] | ... | 5 zonas de magia/armadilha |
+| ... | deckCount | uint32 | Quantidade no deck |
+| ... | handCount | uint32 | Quantidade na mao |
+| ... | graveCount | uint32 | Quantidade no GY |
+| ... | removedCount | uint32 | Quantidade banida |
+| ... | extraCount | uint32 | Quantidade no extra deck |
+| ... | extraPCount | uint32 | Quantidade no extra deck PK |
+
+---
+
+## Nova Feature: Desenho da Mao pelo Motor C++
+
+> **Versao:** 1.0.0
+> **Implementada em:** 2026-07-09
+> **Status:** Concluida
+
+### O que mudou
+
+Anteriormente, o Java distribuia 5 cartas na mao inicial (`DuelApplicationServiceImpl.initializePlayer()` chamava `drawCards(deck, 5)`) e o bridge C++ usava `startingDrawCount=0` para evitar duplicacao.
+
+Agora, o bridge C++ usa `startingDrawCount=5` e o Java inicializa a `hand` como lista vazia. O `OCG_StartDuel()` no motor C++ distribui as 5 cartas automaticamente. Isso garante que o estado interno do C++ e a fonte da verdade desde o inicio.
+
+**Arquivos alterados:**
+- `native/ocgcore-bridge/src/ocgcore_bridge.cpp`: `startingDrawCount` de 0 para 5
+- `DuelApplicationServiceImpl.java`: `INITIAL_HAND_SIZE=0`, remocao de `drawCards(deck, INITIAL_HAND_SIZE)`, `hand` inicializado como `new ArrayList<>()`

@@ -10,7 +10,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Repository
-@Profile("dev")
+@Profile({"dev", "local"})
 public class InMemoryDuelRepository implements DuelRepositoryPort {
 
     private final Map<String, DuelState> store = new ConcurrentHashMap<>();

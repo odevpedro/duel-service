@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Repository
-@Profile("!dev")
+@Profile({"docker", "prod"})
 public class RedisDuelRepository implements DuelRepositoryPort {
 
     private static final String KEY_PREFIX = "duel:";

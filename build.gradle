@@ -12,6 +12,52 @@ repositories {
     mavenCentral()
 }
 
+def nativeResourcesDir = file('src/main/resources/native')
+def osName = System.getProperty('os.name').toLowerCase()
+def libName = osName.contains('win') ? 'ocgcore.dll'
+           : osName.contains('mac') ? 'libocgcore.dylib'
+           : 'libocgcore.so'
+
+task buildNative(type: Exec) {
+    description = 'Build the native ocgcore JNI bridge library via CMake'
+    workingDir = file('native/ocgcore-bridge')
+    commandLine 'cmake', '--build', 'build', '--config', 'Release'
+    doFirst {
+        if (!file('native/ocgcore-bridge/build').exists()) {
+            throw new GradleException(
+                'Build directory not found. Run cmake first:\n' +
+                '  cd native/ocgcore-bridge && cmake -B build -DCMAKE_BUILD_TYPE=Release'
+            )
+        }
+    }
+}
+
+task configureNative(type: Exec) {
+    description = 'Configure CMake for the ocgcore JNI bridge'
+    workingDir = file('native/ocgcore-bridge')
+    commandLine 'cmake', '-B', 'build', '-DCMAKE_BUILD_TYPE=Release'
+}
+
+task copyNativeLib(type: Copy) {
+    description = 'Copy the compiled native library into resources'
+    dependsOn buildNative
+    from("native/ocgcore-bridge/build") {
+        include libName
+    }
+    into nativeResourcesDir
+}
+
+task fullBuildNative {
+    description = 'Configure, build and copy the ocgcore JNI bridge'
+    dependsOn configureNative, copyNativeLib
+}
+
+bootJar {
+    from(nativeResourcesDir) {
+        into 'BOOT-INF/classes/native'
+    }
+}
+
 dependencyManagement {
     imports {
         mavenBom "org.springframework.cloud:spring-cloud-dependencies:2023.0.0"

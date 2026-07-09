@@ -1,7 +1,7 @@
 # Backlog — duel-service
 
 > Registro vivo do progresso do projeto. Atualizado a cada mudanca de estado de uma funcionalidade.
-> **Ultima atualizacao:** 2026-07-08 — Sessao de trabalho: runtime e qualidade (DS-001, QLT-001/008, INFRA-005, health/readiness, docs e testes)
+> **Ultima atualizacao:** 2026-07-09 — Sessao de trabalho: sincronizacao de posicoes via field_data (NATIVE-009), desenho da mao pelo motor C++ (NATIVE-010)
 
 ---
 
@@ -33,11 +33,59 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 
 > Nenhuma feature em andamento.
 
----
-
 ## Pendentes
 
 ### FASE 0 — Criticos (impedem compilacao/execucao)
+
+---
+
+#### `[x]` NATIVE-004 — Bridge compila contra ygopro-core real com Lua 5.4 e nlohmann_json
+
+**Descricao:** O CMakeLists.txt foi reescrito para baixar e compilar Lua 5.4 (estatica), ygopro-core (estatica) e nlohmann_json (header-only) via FetchContent. O bridge C++ (ocgcore_bridge.cpp) compila com sucesso contra a API real do ygopro-core (ocgapi.h), gerando `libocgcore.so` (~2,9 MB) em `src/main/resources/native/`.
+
+**Checklist:**
+- [x] CMakeLists.txt com FetchContent para lua54, ygopro-core, nlohmann_json
+- [x] Lua 5.4 compilado como biblioteca estatica excluindo lua.c/luac.c/onelua.c/ltests.c
+- [x] ygopro-core compilado como biblioteca estatica linkada contra lua54
+- [x] Bridge shared library linkada contra ocgcore-core + lua54
+- [x] lib gerada em src/main/resources/native/ (tamanho ~2,9 MB)
+- [x] Bridge usa OCG_CreateDuel, OCG_DuelProcess, OCG_DuelGetMessage, OCG_DuelSetResponse, OCG_DuelQueryField da API real
+
+**Criterio de aceitacao:** `./gradlew fullBuildNative` compila o bridge contra ygopro-core real com Lua 5.4 integrado.
+
+**Estimativa:** M
+
+---
+
+#### `[x]` NATIVE-001 — C++ JNI bridge para o ocgcore real
+
+**Descricao:** Criar a implementacao C++ do JNI bridge que conecta `OcgCoreBridge.java` ao motor ygopro-core real. Antes existia apenas o stub Java (`OcgCoreStub`) e as declaracoes `native` sem implementacao C++ correspondente.
+
+**O que foi criado:**
+- `native/ocgcore-bridge/include/ocgcore_bridge_api.h` — API C esperada do ygopro-core
+- `native/ocgcore-bridge/src/ocgcore_bridge.cpp` — Implementacao JNI (conversao Java ↔ C, delega ao ygopro-core)
+- `native/ocgcore-bridge/CMakeLists.txt` — Build CMake que baixa ygopro-core via FetchContent e linka estaticamente
+- `native/ocgcore-bridge/README.md` — Instrucoes de build
+- `src/main/resources/native/README.md` — Atualizado com novo fluxo
+
+**Integracao no build:**
+- `build.gradle`: Tarefas `configureNative`, `buildNative`, `copyNativeLib`, `fullBuildNative`
+- `Dockerfile`: Copia a lib nativa e configura `LD_LIBRARY_PATH`
+
+**Checklist:**
+- [x] JNI header gerado de `OcgCoreBridge.java`
+- [x] Implementacao C++ do bridge (JNI ↔ C)
+- [x] CMakeLists.txt com FetchContent do ygopro-core
+- [x] Integracao Gradle (buildNative task)
+- [x] Dockerfile atualizado
+- [x] Testes de fallback (`OcgCoreLoaderTest`)
+- [x] Documentacao atualizada
+
+**Dependencia externa:** O binario final (`libocgcore.so`) depende do repositorio `edo9300/ygopro-core` para ser compilado via CMake FetchContent.
+
+**Criterio de aceitacao:** `./gradlew test` passa, `./gradlew fullBuildNative` compila o bridge (requer ygopro-core acessivel via git). O fallback stub continua funcionando sem a lib nativa.
+
+**Estimativa:** L
 
 ---
 
@@ -592,7 +640,7 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
   registry.enableSimpleBroker("/topic")
          .setHeartbeatValue(new long[]{10000, 10000}); // client, server (ms)
   ```
-- [ ] No frontend, configurar heartbeat no `Client` do STOMP
+- [x] Heartbeat do servidor configurado (10s). O heartbeat do cliente (frontend) e responsabilidade do repositorio `yu-gi-oh-deck-management-front-end` (item WEB-022/.env + configuracao do STOMP Client).
 
 **Estimativa:** XS
 
@@ -741,6 +789,42 @@ USUARIO                            FRONTEND                          DUEL-SERVIC
    │<─── tela de resultado ──────────│                                  │
 ```
 
+## Pendentes
+
+### FASE 3E — Engine Nativa (bridge real)
+
+---
+
+#### `[x]` NATIVE-009 — Bridge stateful: sincronizar posicoes das cartas entre Java e C++
+
+**Descricao:** O bridge C++ retorna `field_data` via `OCG_DuelQueryField` contendo as posicoes atuais de todas as cartas. O `OcgCoreAdapter.applyEngineResult()` agora extrai esse campo e sincroniza as listas do `DuelState` Java (monsterZones, spellTrapZones, deck, hand, graveyard, banished) com os dados retornados pelo motor.
+
+**Checklist:**
+- [x] Extrair do `engine.field` as posicoes de cada carta por jogador
+- [x] Sincronizar MonsterZones e SpellTrapZones via `syncZoneList()`
+- [x] Atualizar contagens de deck/hand/grave/banished via `trimList()`
+- [x] Mapear posicoes do C++ (POS_FACEUP_ATTACK, POS_FACEDOWN_DEFENSE, etc.) para `CardPosition` Java
+
+**Implementacao:** `OcgCoreAdapter.java:109-178` — metodos `syncFieldPositions()`, `syncZoneList()`, `mapCardPosition()`, `trimList()`
+
+**Estimativa:** M
+
+---
+
+#### `[x]` NATIVE-010 — Desenho da mao inicial pelo motor C++
+
+**Descricao:** O bridge C++ agora usa `startingDrawCount=5` em vez de `startingDrawCount=0`. O Java (`DuelApplicationServiceImpl.initializePlayer()`) nao distribui mais as 5 cartas iniciais — isso e feito pelo `OCG_StartDuel()` no C++. O primeiro turno continua sem compra (regra oficial mantida pelo motor C++).
+
+**Checklist:**
+- [x] Bridge C++: `startingDrawCount` alterado de 0 para 5
+- [x] Java: `INITIAL_HAND_SIZE` alterado para 0
+- [x] Java: removida a chamada `drawCards(deck, INITIAL_HAND_SIZE)`
+- [x] Java: `hand` inicializado como lista vazia em vez de receber as cartas
+
+**Estimativa:** XS
+
+---
+
 ## Concluidas
 
 - `[x]` Criacao de duelos via REST API — 2025-01 — PR #1
@@ -768,6 +852,15 @@ USUARIO                            FRONTEND                          DUEL-SERVIC
 - `[x]` GAME-006C: LP nunca negativo (floor em 0) — 2026-07-07 — Implementado
 - `[x]` GAME-006D: Tratar empate (DRAW) — 2026-07-07 — Implementado
 - `[x]` DS-001: Criar docs/data-model.md — 2026-07-07 — Implementado
+- `[x]` NATIVE-001: C++ JNI bridge para ocgcore real — 2026-07-09 — Implementado
+- `[x]` NATIVE-002: Testes do OcgCoreLoader/fallback — 2026-07-09 — Implementado
+- `[x]` NATIVE-003: Dockerfile com suporte a lib nativa — 2026-07-09 — Implementado
+- `[x]` NATIVE-004: Bridge compila contra ygopro-core real com Lua 5.4 e nlohmann_json — 2026-07-09 — Implementado
+- `[x]` NATIVE-005: OcgCoreBridgeResponse + applyEngineResult() — 2026-07-09 — Implementado
+- `[x]` NATIVE-006: Bridge stateful (OCG_Duel persistente por duelId) — 2026-07-09 — Implementado
+- `[x]` NATIVE-007: Raw WebSocket endpoint `/ws-raw` para clientes sem SockJS — 2026-07-09 — Implementado
+- `[x]` NATIVE-008: Constantes de fase do ygopro-core atualizadas (0x01...0x200) — 2026-07-09 — Implementado
+- `[x]` BUG-011: `engine.field` string mal-parseada — bridge retornava objeto JSON, Java esperava String — Corrigido
 
 ---
 

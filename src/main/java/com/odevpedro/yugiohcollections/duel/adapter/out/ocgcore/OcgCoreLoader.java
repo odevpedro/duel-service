@@ -11,7 +11,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 @Slf4j
 @Component
-@Profile("!dev")
+@Profile({"local", "docker", "prod"})
 public class OcgCoreLoader {
 
     private static volatile boolean loaded;

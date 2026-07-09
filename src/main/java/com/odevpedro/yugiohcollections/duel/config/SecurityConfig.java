@@ -32,7 +32,7 @@ public class SecurityConfig {
             .exceptionHandling(exceptions -> exceptions
                     .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/ws/**", "/actuator/health", "/actuator/health/**", "/h2-console/**").permitAll()
+                .requestMatchers("/ws/**", "/ws-raw/**", "/actuator/health", "/actuator/health/**", "/h2-console/**", "/api/auth/**").permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 .anyRequest().authenticated()
             )
