@@ -1,0 +1,44 @@
+diff --git a/src/ygopro/room/domain/states/YGOProDuelingState.ts b/src/ygopro/room/domain/states/YGOProDuelingState.ts
+--- a/src/ygopro/room/domain/states/YGOProDuelingState.ts
++++ b/src/ygopro/room/domain/states/YGOProDuelingState.ts
+@@ -41,2 +41,11 @@
+-export class YGOProDuelingState extends RoomState {
+-  private readonly eventBus: EventBus;
++const parsedBotResponseDelay = Number.parseInt(
++  process.env.BOT_RESPONSE_DELAY_MS ?? "0",
++  10,
++);
++const BOT_RESPONSE_DELAY_MS = Number.isFinite(parsedBotResponseDelay)
++  ? Math.max(0, parsedBotResponseDelay)
++  : 0;
++const BOT_PLAYER_NAME_PREFIX = process.env.BOT_PLAYER_NAME_PREFIX ?? "WindBot";
++
++export class YGOProDuelingState extends RoomState {
++  private readonly eventBus: EventBus;
+@@ -305,2 +314,24 @@
+-    const responseSide = this.ocgCore.currentResponseSide;
+-    const responseTeam = this.ocgCore.getSideTeam(responseSide);
++    const playerName = player.name.replace(/\0/g, "").trim();
++    if (
++      BOT_RESPONSE_DELAY_MS > 0 &&
++      playerName.startsWith(BOT_PLAYER_NAME_PREFIX)
++    ) {
++      this.logger.debug("Pacing WindBot response", {
++        playerName,
++        delayMs: BOT_RESPONSE_DELAY_MS,
++      });
++      await new Promise((resolve) =>
++        setTimeout(resolve, BOT_RESPONSE_DELAY_MS),
++      );
++
++      if (
++        this.ocgCore.currentResponseSide === null ||
++        player !== this.ocgCore.responsePlayer ||
++        !this.ocgCore.hasOcgcore()
++      ) {
++        return;
++      }
++    }
++
++    const responseSide = this.ocgCore.currentResponseSide;
++    const responseTeam = this.ocgCore.getSideTeam(responseSide);

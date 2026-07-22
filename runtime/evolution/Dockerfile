@@ -20,6 +20,8 @@ COPY .local-runtime/evolution-server/package.json .local-runtime/evolution-serve
 RUN HUSKY=0 npm ci
 
 COPY .local-runtime/evolution-server/ ./
+COPY runtime/evolution/patches/ /tmp/evolution-patches/
+RUN git apply --unidiff-zero /tmp/evolution-patches/*.patch
 RUN git clone --no-checkout --filter=blob:none \
       https://github.com/diangogav/evolution-types.git src/evolution-types \
     && git -C src/evolution-types fetch --depth 1 origin "$EVOLUTION_TYPES_COMMIT" \

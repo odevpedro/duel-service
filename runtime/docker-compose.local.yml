@@ -21,6 +21,8 @@ services:
       USE_REDIS: "false"
       RATE_LIMIT_ENABLED: "false"
       SIDE_TIMEOUT_MINUTES: 3
+      BOT_RESPONSE_DELAY_MS: "650"
+      BOT_PLAYER_NAME_PREFIX: WindBot
       YGOPRO_FOLDERS: /app/resources/ygopro/base
     ports:
       - "7911:7911"

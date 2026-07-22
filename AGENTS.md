@@ -1,144 +1,117 @@
-# Contexto do Ecossistema para Agentes
+# Direcao do Ecossistema para Agentes
 
 ## Objetivo Atual
 
 O unico marco de produto em andamento e uma partida local completa no
 navegador contra WindBot, usando ocgcore, CardScripts e cards.cdb reais.
 
-- Leia `docs/local-duel-backlog.md` antes de alterar gameplay.
-- Nao implemente regras de duelo em Java ou React.
-- Nao trate `build_response()` como IA.
-- Nao use ou recrie stubs, mocks de engine ou fallbacks de regras.
-- Nao execute auth-service, Redis, Kafka ou outros microsservicos para validar
-  o fluxo local.
-- Nao marque gameplay como concluido sem executar o smoke manual E2E-001.
+Antes de alterar gameplay:
 
-## Projetos
+1. Leia `docs/local-duel-backlog.md`.
+2. Leia `runtime/README.md`.
+3. Confirme o fluxo em `http://localhost:5173/duel/local`.
 
-Este repositório (`duel-service`) faz parte de um ecossistema de 3 projetos:
+O backlog canonico e a fonte de verdade. Documentos antigos descrevem o
+Spring/JNI e os microsservicos apenas como arquitetura legada ou futura.
 
-| Projeto | Caminho | Função | Porta |
-|---|---|---|---|
-| duel-service | `./` | Motor de duelo (Spring Boot + ocgcore C++ via JNI) | 8084 |
-| yu-gi-oh-deck-management | `../yu-gi-oh-deck-management/` | 6 microsserviços backend (auth, card, deck, card-creator, proxy, community) | 8080-8086 |
-| yu-gi-oh-deck-management-front-end | `../yu-gi-oh-deck-management-front-end/` | React SPA (campo de duelo interativo) | 5173 |
+## Arquitetura do Duelo Local
 
-## Regras Obrigatórias para Teste
+```text
+React original (/duel/local)
+  -> protocolo EDOPro/YGOPro binario por WebSocket
+Evolution Server
+  -> CoreIntegrator
+ocgcore + CardScripts + cards.cdb
+  <- WindBot oficial como segundo jogador
+```
 
-1. **Sempre pular testes unitários**: Use `./gradlew build -x test` em TODOS os builds. Os testes demoram muito e não são necessários para teste local.
-2. **Ignorar autenticação**: Durante teste local, TODOS os endpoints devem ser públicos (permitAll). Auth-service é usado apenas para registro/login, mas os demais serviços NÃO devem validar JWT.
-3. **Usar ocgcore nativo sempre**: O stub OcgCoreStub foi removido. O motor C++ ocgcore via JNI é a ÚNICA implementação disponível. O profile `dev` agora também usa o motor nativo.
+- O React apresenta estado e envia escolhas oferecidas pelo protocolo.
+- O ocgcore e a unica autoridade de regras, efeitos, fases, dano e correntes.
+- O WindBot toma as decisoes da IA. Nao ha IA Java ou React.
+- Imagens e metadados dos decks de smoke sao locais durante a partida.
 
-## Stack
+## Projetos e Responsabilidades
 
-- **Java 21** (ambos backends), **Gradle** (wrapper incluso)
-- **Spring Boot 3.2**, **PostgreSQL 16**, **Redis 7**, **Kafka**
-- **Node 18** + **React 18** + **Vite 5** (front-end)
-- **C++20** + **CMake 3.20+** (ygopro-core via JNI)
+| Projeto | Caminho | Responsabilidade atual |
+|---|---|---|
+| duel-service | `./` | Runtime Evolution/ocgcore/WindBot, scripts e backlog canonico |
+| frontend | `../yu-gi-oh-deck-management-front-end/yugioh-duel-react/yugioh-duel-react/` | Campo React e cliente binario em `/duel/local` |
+| deck-management | `../yu-gi-oh-deck-management/` | Cadastro, catalogo, decks e recursos sociais; fora do inner loop local |
 
-## Otimizações para Teste Local
+O deck-management nao foi descartado. O deck-service voltara a fornecer decks
+quando a partida fixa estiver consolidada. Auth, historico, comunidade e Kafka
+continuam sendo recursos do produto, mas nao podem bloquear o smoke local.
 
-### Build rápido (pular testes)
+## Regras Obrigatorias
+
+- Nao criar stubs, mocks de engine, `LocalEngine` ou fallback de regras.
+- Nao implementar regras de Yu-Gi-Oh! em Java, JavaScript ou React.
+- Nao tratar `build_response()` ou respostas automaticas genericas como IA.
+- Nao iniciar Spring Boot, auth, Redis, Kafka, PostgreSQL, card-service ou
+  deck-service para testar `/duel/local`.
+- Nao adicionar JWT ao fluxo local.
+- Nao buscar imagem em endpoint REST durante o duelo de smoke.
+- Nao esconder o inspetor de carta com prompts ou menus de acao.
+- Acoes ligadas a cartas e zonas visiveis devem acontecer no proprio campo.
+- Uma corrente sem candidatos pode ser recusada automaticamente. Havendo uma
+  resposta legal opcional, o jogador deve poder ativar ou escolher
+  `Nao responder`. Correntes forcadas nao podem ser puladas.
+- Motion design deve representar eventos confirmados pelo ocgcore e nunca
+  adiantar ou inventar estado.
+
+## Desenvolvimento Rapido
+
+Fluxo completo minimo:
+
 ```bash
-./gradlew build -x test
+./dev.sh local-play
 ```
-Sempre use `-x test` durante desenvolvimento/teste local. Os testes são extensos e demoram. O build completo sem testes leva <10s.
 
-### Para subir full stack rapidamente
+Comandos especializados:
 
 ```bash
-# 0. Matar processos antigos (NÃO usar pkill - trava o terminal)
-kill $(ps aux | grep bootRun | grep -v grep | awk '{print $2}') 2>/dev/null; sleep 2
-
-# 1. Infraestrutura (apenas o necessário)
-cd ../yu-gi-oh-deck-management && docker compose up -d deck-db auth-db
-cd ../duel-service && docker compose up -d redis
-
-# 2. Build sem testes
-cd ../yu-gi-oh-deck-management
-./gradlew :shared-domain:build -x test
-./gradlew :auth-service:build :card-service:build :deck-service:build -x test
-
-cd ../duel-service
-./gradlew build -x test
-
-# 3. Iniciar serviços (em terminais separados ou background)
-cd ../yu-gi-oh-deck-management
-nohup ./gradlew :auth-service:bootRun > logs/auth-service.log 2>&1 &
-nohup ./gradlew :card-service:bootRun > logs/card-service.log 2>&1 &
-nohup ./gradlew :deck-service:bootRun > logs/deck-service.log 2>&1 &
-
-cd ../duel-service
-nohup ./gradlew bootRun --args='--spring.profiles.active=local' > /tmp/duel-logs/duel-service.log 2>&1 &
-
-# 4. Front-end
-cd ../yu-gi-oh-deck-management-front-end/yugioh-duel-react/yugioh-duel-react
-npm install && npm run dev
+./dev.sh runtime-setup   # baixa e verifica recursos fixados
+./dev.sh runtime-up      # recompila/reinicia Evolution e WindBot
+./dev.sh runtime-status
+./dev.sh runtime-down
 ```
 
-### Verificação rápida de saúde
-```bash
-for p in 8080 8081 8084 8086; do
-  echo "port $p: $(curl -s -o /dev/null -w '%{http_code}' http://localhost:$p/actuator/health 2>&1)"
-done
-```
+Alteracao apenas no frontend usa o Vite ja ativo; nao reconstrua containers.
+Alteracao em `runtime/evolution`, Compose ou Dockerfile exige `runtime-up`.
 
-### Perfis do duel-service
-- Todos os perfis usam ocgcore nativo (C++ via JNI). O stub foi removido.
-- `dev` (padrão): H2, Redis opcional
-- `local`: Redis opcional, Kafka com fallback rápido
-- `prod`: Redis obrigatório, Kafka real
+## Builds e Testes
 
-## Problemas Comuns e Correções
+- Nunca execute testes unitarios no inner loop.
+- Java: `./gradlew build -x test` ou `./dev.sh compile`.
+- Frontend original: `npm run build` no diretorio do app React.
+- Cliente isolado: `npm run build` em `runtime/web-client`.
+- Nao rode `npm install` se `node_modules` e o lockfile ja satisfazem o build.
+- Valide mudancas visuais em desktop e mobile com navegador real.
+- Para gameplay, o aceite e o fluxo jogavel local, nao apenas compilacao.
 
-### CORS
-Resolvido permanentemente: todos os serviços têm `.cors(cors -> {})` configurado. Não é mais necessário configurar CORS manualmente ou usar `--disable-web-security`.
+## Criterio de Smoke
 
-### Erro: TokenValidationClient not found
-Faltam os pacotes do shared-domain no `@EnableFeignClients`. Corrigir com:
-```java
-@EnableFeignClients(basePackages = {"seu.pacote", "com.odevpedro.yugiohcollections.shared.security"})
-@ComponentScan(basePackages = {"seu.pacote", "com.odevpedro.yugiohcollections.shared"})
-```
+O smoke deve confirmar, conforme a area alterada:
 
-### Erro: duplicate libocgcore.so no bootJar
-Adicionar no `build.gradle`:
-```groovy
-bootJar {
-    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-}
-```
+- sala criada sem login;
+- deck humano Blue-Eyes com 40 cartas e Extra Deck real;
+- WindBot entra como oponente e executa combo;
+- summon, set, ativacao, selecao, corrente, batalha e game over passam pelo
+  protocolo e pelo ocgcore;
+- nenhuma informacao privada do oponente e revelada;
+- nenhuma chamada a auth, deck-service, card-service ou API externa de imagem;
+- nenhum erro de pagina ou pacote de protocolo ignorado.
 
-### Portas dos serviços
-| Serviço | Porta | Docker DB | Porta DB |
-|---|---|---|---|
-| card-service | 8080 | - | - |
-| deck-service | 8081 | deck-db (postgres:16) | 5433 |
-| proxy-service | 8082 | - | - |
-| card-creator-service | 8083 | creator-db (postgres:16) | 5434 |
-| duel-service | 8084 | redis:7 | 6379 |
-| community-service | 8085 | community-db (postgis:16) | 5436 |
-| auth-service | 8086 | auth-db (postgres:16) | 5435 |
-| front-end | 5173 | - | - |
+Nao marque itens do backlog como concluidos sem evidencia correspondente.
 
-## Fluxo de Teste Completo
+## Portas do Fluxo Atual
 
-1. Abrir `http://localhost:5173` no navegador
-2. Registrar usuário (Register) com username, email, senha (auth-service ainda funciona)
-3. Fazer login (o front-end gerencia o token)
-4. No lobby, criar um deck via API (sem token necessário):
-   ```bash
-   DECK_ID=$(curl -s -X POST http://localhost:8081/decks \
-     -H 'Content-Type: application/json' \
-     -d '{"name":"deck-teste"}' | jq -r '.id')
+| Servico | Porta |
+|---|---:|
+| frontend Vite | 5173 |
+| Evolution WebSocket | 4000/4001 |
+| Evolution HTTP | 7922 |
+| WindBot launcher | 2399 |
 
-   for card in 46986414 89631139 78033274; do
-     curl -s -X POST "http://localhost:8081/decks/$DECK_ID/cards" \
-       -H 'Content-Type: application/json' \
-       -d "{\"cardId\": $card, \"quantity\": 3, \"zone\": \"MAIN\"}"
-   done
-   ```
-5. Recarregar o lobby e selecionar o deck
-6. Criar duelo contra "ai"
-7. Jogar! O bot agora summona monstros, ataca e ativa cartas automaticamente.
-   As ações são processadas pelo motor C++ ocgcore via JNI.
+As portas 8080-8086 pertencem aos servicos legados/futuros e nao participam do
+duelo local minimo.

@@ -61,6 +61,15 @@ roda dentro do bridge JNI e nao e substituido por heuristicas Java.
 
 Nenhuma tarefa pode ser marcada como concluida apenas porque o core compilou.
 
+## Proxima ordem de trabalho
+
+1. Fechar o unico item manual do marco jogavel: ataque iniciado pelo humano.
+2. Implementar fila visual e motion dos eventos confirmados pelo ocgcore.
+3. Gravar transcript e automatizar o smoke curto para impedir regressoes.
+4. Tornar a velocidade do oponente configuravel na propria experiencia local.
+5. Reintegrar primeiro o deck-service, mantendo auth e demais servicos fora do
+   fluxo local anonimo.
+
 ## Regras de implementacao
 
 1. O runtime deve falhar se ocgcore, cards.cdb ou scripts nao estiverem presentes.
@@ -87,8 +96,8 @@ empacotamento.
 ### DEV-002 - Build nativo incremental
 
 - [x] Usar `cmake --build ... --parallel`.
-- [ ] Fixar o commit do ocgcore; nao acompanhar `master` implicitamente.
-- [ ] Separar download/configuracao de dependencias da compilacao cotidiana.
+- [x] Fixar Evolution/core por commit e verificar o binario por checksum.
+- [x] Separar `runtime-setup` do comando cotidiano `local-play`.
 - [ ] Disponibilizar artefato nativo precompilado para o ambiente local.
 
 Aceite: mudanca fora do C++ nao recompila ocgcore.
@@ -149,9 +158,9 @@ efeitos integralmente.
 
 ### PROTO-001 - Contrato de eventos
 
-- [ ] Traduzir mensagens do servidor para eventos JSON tipados.
-- [ ] Preservar tipo, jogador, sequencia e payload original para diagnostico.
-- [ ] Nao reduzir o protocolo a `SUMMON`, `ATTACK`, `SPELL` e `SET`.
+- [x] Consumir o protocolo binario tipado com `ygopro-msg-encode` no browser.
+- [x] Preservar tipo, jogador, localizacao e sequencia das mensagens do core.
+- [x] Nao reduzir o protocolo a `SUMMON`, `ATTACK`, `SPELL` e `SET`.
 - [ ] Salvar transcript deterministico de uma partida de referencia.
 
 Aceite: todos os eventos da partida EDOPro de referencia podem ser reproduzidos
@@ -160,9 +169,9 @@ e inspecionados.
 ### PROTO-002 - Prompts e respostas
 
 - [x] Expor ao browser os prompts usados pelo deck de smoke com suas opcoes legais.
-- [ ] Correlacionar resposta com duelo, jogador e prompt pendente.
+- [x] Correlacionar resposta com jogador e prompt pendente no Evolution.
 - [x] Codificar escolhas simples e selecoes progressivas no formato moderno.
-- [ ] Rejeitar resposta atrasada, duplicada ou de outro jogador.
+- [x] Rejeitar resposta atrasada, duplicada ou de outro jogador.
 
 Aceite: humano escolhe zona, posicao, alvo, custo e chain pelo navegador.
 
@@ -242,9 +251,42 @@ oculta as informacoes da carta inspecionada.
 Aceite: o jogador so e interrompido por uma corrente quando existe uma resposta
 legal; escolhas ligadas a uma carta ou zona visivel acontecem no proprio campo.
 
-## Marco 5 - reintegracao gradual
+## Marco 5 - ritmo e motion design
+
+### UX-MOTION-001 - Ritmo legivel do oponente
+
+- [x] Adicionar atraso configuravel somente entre decisoes do WindBot.
+- [ ] Exibir um estado visual discreto enquanto o WindBot decide.
+- [ ] Criar uma fila visual para eventos consecutivos sem bloquear o protocolo.
+- [ ] Permitir velocidade normal, rapida e instantanea nas configuracoes locais.
+
+### UX-MOTION-002 - Cartas com presenca fisica
+
+- [x] Ampliar o foco da carta na mao no hover e manter foco menor no clique.
+- [ ] Animar compra da pilha para a mao a partir do evento confirmado.
+- [ ] Animar summon, set, flip e ativacao entre origem e zona de destino.
+- [ ] Animar envio ao cemiterio, banimento e retorno para a mao/deck.
+- [ ] Criar transicoes de reorganizacao da mao sem deslocamentos bruscos.
+
+### UX-MOTION-003 - Combate, corrente e acessibilidade
+
+- [ ] Representar ataque, alvo, dano e alteracao de LP com timing coordenado.
+- [ ] Representar elos e resolucao de corrente sem cobrir o inspetor.
+- [ ] Dar feedback visual para efeitos negados, alvos e cartas reveladas.
+- [ ] Respeitar `prefers-reduced-motion` e oferecer reducao manual de movimento.
+- [ ] Garantir que motion nunca altere estado antes da confirmacao do ocgcore.
+
+Aceite do marco: uma sequencia do WindBot pode ser acompanhada visualmente,
+evento por evento, e o jogador consegue inspecionar a carta relevante durante
+toda a resolucao.
+
+## Marco 6 - reintegracao gradual
 
 Somente depois de E2E-001:
+
+O deck-management permanece como sistema de cadastro, catalogo e decks. Ele
+nao participa do inner loop atual, mas tambem nao deve ser removido ou duplicado
+dentro do runtime de duelo.
 
 - [ ] carregar decks do deck-service;
 - [ ] registrar resultado e historico;
@@ -304,6 +346,10 @@ O projeto e jogavel somente quando todos estes pontos forem verdadeiros:
   selecao de zona ancorada no campo;
 - correntes sem nenhuma opcao legal sao recusadas automaticamente; correntes
   opcionais com candidatos preservam a escolha `Nao responder`;
+- WindBot com atraso local de 650 ms: intervalos de 582 ms e 1.073 ms observados
+  entre blocos consecutivos do combo;
+- carta focada na mao: caixa visual de 239x341 px no desktop e 204x291 px no
+  mobile, com controles acima da carta e sem overflow horizontal;
 - nenhum teste unitario foi executado;
 
 - `bash -n dev.sh`: sucesso;

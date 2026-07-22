@@ -27,6 +27,11 @@ uploads the pinned Blue-Eyes deck and launches WindBot without login.
 The local runtime does not start Spring Boot, PostgreSQL, Redis, Kafka or any
 authentication service.
 
+WindBot decisions are paced by `BOT_RESPONSE_DELAY_MS` in
+`docker-compose.local.yml` (650 ms by default). The delay is applied only to
+responses from players whose name starts with `BOT_PLAYER_NAME_PREFIX`; human
+responses and ocgcore processing are not delayed.
+
 Ports:
 
 - 7911: EDOPro TCP protocol;
