@@ -326,6 +326,9 @@ export class LocalDuelClient {
       this.emit({ winner: message.player, status: 'finished', statusText: 'Partida concluida pelo ocgcore', prompt: null })
     } else if (message instanceof Y.YGOProMsgWaiting) {
       this.emit({ prompt: null, statusText: 'Aguardando a jogada do WindBot...' })
+    } else if (message instanceof Y.YGOProMsgSelectChain && message.count === 0 && message.chains.length === 0) {
+      this.addLog('Corrente vazia respondida automaticamente')
+      this.respondGame(message.prepareResponse(null))
     } else if (typeof message.prepareResponse === 'function') {
       this.emit({ prompt: { type: 'game', message }, statusText: 'Sua decisao' })
     }

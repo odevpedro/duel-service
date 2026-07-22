@@ -230,6 +230,18 @@ partida com decks de smoke.
 Aceite: o fluxo principal nao depende de uma lista lateral e nenhuma decisao
 oculta as informacoes da carta inspecionada.
 
+### WEB-LOCAL-005 - Selecao espacial e prioridade de corrente
+
+- [x] Responder `SELECT_EFFECT_YN` diretamente na carta que oferece o efeito.
+- [x] Exibir opcoes reais de `SELECT_CHAIN` sobre as cartas correspondentes.
+- [x] Responder automaticamente uma corrente vazia, sem interromper o jogador.
+- [x] Manter `Nao responder` quando ha efeito legal e a corrente nao e forcada.
+- [x] Selecionar cartas visiveis e zonas diretamente nos elementos do campo.
+- [x] Ampliar o inspetor local, a arte e o texto de efeito para leitura continua.
+
+Aceite: o jogador so e interrompido por uma corrente quando existe uma resposta
+legal; escolhas ligadas a uma carta ou zona visivel acontecem no proprio campo.
+
 ## Marco 5 - reintegracao gradual
 
 Somente depois de E2E-001:
@@ -286,6 +298,12 @@ O projeto e jogavel somente quando todos estes pontos forem verdadeiros:
 - acoes de summon, set, ativacao e ataque ancoradas nas cartas do prompt;
 - inspetor preservado durante a Main Phase e controles dentro do viewport em
   1600x1000 e 390x844;
+- inspetor local medido em 390 px, arte em 300 px e texto de efeito em 12,48 px
+  com linha de 19,72 px no viewport 1600x1000;
+- ativacoes reais de `Bingo Machine, Go!!!` e `Maiden of White` chegaram a
+  selecao de zona ancorada no campo;
+- correntes sem nenhuma opcao legal sao recusadas automaticamente; correntes
+  opcionais com candidatos preservam a escolha `Nao responder`;
 - nenhum teste unitario foi executado;
 
 - `bash -n dev.sh`: sucesso;
