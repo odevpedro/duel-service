@@ -1,0 +1,56 @@
+name: duel-local-runtime
+
+services:
+  evolution:
+    build:
+      context: ..
+      dockerfile: runtime/evolution/Dockerfile
+      args:
+        EVOLUTION_TYPES_COMMIT: 6c63181a66e2ab56f6e36141a75da214a7131982
+    container_name: duel-evolution
+    environment:
+      NODE_ENV: local
+      HOST_PORT: 7911
+      YGOPRO_PORT: 7711
+      YGOPRO_WEBSOCKET_PORT: 4002
+      HTTP_PORT: 7922
+      WEBSOCKET_PORT: 4000
+      WEBSOCKET_DUEL_PORT: 4001
+      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+      RANK_ENABLED: "false"
+      USE_REDIS: "false"
+      RATE_LIMIT_ENABLED: "false"
+      SIDE_TIMEOUT_MINUTES: 3
+      YGOPRO_FOLDERS: /app/resources/ygopro/base
+    ports:
+      - "7911:7911"
+      - "7922:7922"
+      - "4000:4000"
+      - "4001:4001"
+    volumes:
+      - ../.local-runtime/resources/CardScripts:/app/resources/edopro/scripts:ro
+      - ../.local-runtime/resources/BabelCDB:/app/resources/edopro/databases:ro
+      - ../.local-runtime/resources/LFLists:/app/resources/edopro/banlists-ignis:ro
+      - ../.local-runtime/resources/LFLists:/app/resources/edopro/banlists-evolution:ro
+      - ../.local-runtime/resources/BabelCDB/cards.cdb:/app/resources/ygopro/base/cards.cdb:ro
+      - ../.local-runtime/resources/CardScripts:/app/resources/ygopro/base/script:ro
+      - ../.local-runtime/resources/LFLists/OCG.lflist.conf:/app/resources/ygopro/base/lflist.conf:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7922/api/getrooms').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+    restart: unless-stopped
+
+  windbot:
+    build:
+      context: ..
+      dockerfile: runtime/windbot/Dockerfile
+    container_name: duel-windbot
+    command: ["ServerMode=True", "ServerPort=2399", "DbPath=/cards/cards.cdb", "Chat=False"]
+    ports:
+      - "2399:2399"
+    volumes:
+      - ../.local-runtime/resources/BabelCDB:/cards:ro
+      - ./decks/AI_BE2025.ydk:/opt/windbot/Decks/AI_BE2025.ydk:ro
+    restart: unless-stopped

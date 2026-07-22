@@ -1,5 +1,12 @@
 # Roadmap de Implementacao — Ecossistema Duelo
 
+> **SUBSTITUIDO EM 2026-07-21:** este roadmap foi criado antes da decisao de usar
+> ocgcore + recursos canonicos + WindBot como runtime local. Ele permanece
+> somente como historico. A ordem de trabalho atual esta em
+> [docs/local-duel-backlog.md](docs/local-duel-backlog.md).
+>
+> Nao implemente fases deste documento antes do marco local jogavel.
+
 > Ordem recomendada para implementar tudo que esta nos backlogs.
 > Cada fase entrega um marco jogavel.
 

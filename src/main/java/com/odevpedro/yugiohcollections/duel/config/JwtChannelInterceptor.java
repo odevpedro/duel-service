@@ -13,6 +13,7 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Component;
 
@@ -22,9 +23,14 @@ import java.util.List;
 @Component
 public class JwtChannelInterceptor implements ChannelInterceptor {
 
+    private static final String LOCAL_PLAYER_HEADER = "X-Player-Id";
+
     private final JwtProperties jwtProperties;
     private final SessionManager sessionManager;
     private final SessionHandler sessionHandler;
+
+    @Value("${duel.auth.enabled:true}")
+    private boolean authenticationEnabled;
 
     public JwtChannelInterceptor(JwtProperties jwtProperties, 
                                   SessionManager sessionManager,
@@ -39,6 +45,16 @@ public class JwtChannelInterceptor implements ChannelInterceptor {
         StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
 
         if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
+            if (!authenticationEnabled) {
+                String playerId = accessor.getFirstNativeHeader(LOCAL_PLAYER_HEADER);
+                if (playerId == null || playerId.isBlank()) {
+                    playerId = "local-player";
+                }
+                accessor.setUser(new StompPrincipal(playerId, playerId, "LOCAL"));
+                log.info("Local WebSocket session connected as {}", playerId);
+                return message;
+            }
+
             String authHeader = accessor.getFirstNativeHeader("Authorization");
 
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {

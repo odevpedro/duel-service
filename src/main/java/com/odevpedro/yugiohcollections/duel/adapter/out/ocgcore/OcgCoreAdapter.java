@@ -8,6 +8,7 @@ import com.odevpedro.yugiohcollections.duel.domain.model.DuelState;
 import com.odevpedro.yugiohcollections.duel.domain.model.Player;
 import com.odevpedro.yugiohcollections.duel.domain.model.Zone;
 import com.odevpedro.yugiohcollections.duel.domain.model.enums.CardPosition;
+import com.odevpedro.yugiohcollections.duel.domain.model.enums.CardType;
 import com.odevpedro.yugiohcollections.duel.domain.model.enums.GameStatus;
 import com.odevpedro.yugiohcollections.duel.domain.model.enums.Phase;
 import com.odevpedro.yugiohcollections.duel.domain.port.OcgCorePort;
@@ -16,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,18 +28,15 @@ public class OcgCoreAdapter implements OcgCorePort {
 
     private final OcgCoreBridge bridge;
     private final ObjectMapper objectMapper;
-    private final OcgCoreStub fallback = new OcgCoreStub();
 
     @Override
     public DuelState processAction(DuelState state, DuelActionDTO action, String playerId) {
         try {
-            if (!OcgCoreLoader.isLoaded()) {
-                return fallback.processAction(state, action, playerId);
-            }
             String stateJson  = objectMapper.writeValueAsString(state);
             String actionJson = objectMapper.writeValueAsString(action);
 
             String resultJson = bridge.processAction(stateJson, actionJson, playerId);
+            log.info("OCG Bridge response: {}", resultJson.substring(0, Math.min(resultJson.length(), 2000)));
             OcgCoreBridgeResponse resp = objectMapper.readValue(resultJson, OcgCoreBridgeResponse.class);
             applyEngineResult(state, resp);
             return state;
@@ -50,9 +49,6 @@ public class OcgCoreAdapter implements OcgCorePort {
     @Override
     public DuelState advancePhase(DuelState state) {
         try {
-            if (!OcgCoreLoader.isLoaded()) {
-                return fallback.advancePhase(state);
-            }
             String stateJson  = objectMapper.writeValueAsString(state);
             String resultJson = bridge.advancePhase(stateJson);
             OcgCoreBridgeResponse resp = objectMapper.readValue(resultJson, OcgCoreBridgeResponse.class);
@@ -67,9 +63,6 @@ public class OcgCoreAdapter implements OcgCorePort {
     @Override
     public boolean isActionValid(DuelState state, DuelActionDTO action, String playerId) {
         try {
-            if (!OcgCoreLoader.isLoaded()) {
-                return fallback.isActionValid(state, action, playerId);
-            }
             String stateJson  = objectMapper.writeValueAsString(state);
             String actionJson = objectMapper.writeValueAsString(action);
             return bridge.isActionValid(stateJson, actionJson, playerId);
@@ -106,16 +99,21 @@ public class OcgCoreAdapter implements OcgCorePort {
             state.setStatus(GameStatus.IN_PROGRESS);
         }
 
-        syncFieldPositions(state, engine.getField());
+        syncFieldPositions(state, engine.getField(), resp.getCardData());
     }
 
     @SuppressWarnings("unchecked")
-    private void syncFieldPositions(DuelState state, Object fieldObj) {
+    private void syncFieldPositions(DuelState state, Object fieldObj, Object cardDataObj) {
         if (fieldObj == null) return;
         try {
             Map<String, Object> field = (Map<String, Object>) fieldObj;
             List<Map<String, Object>> players = (List<Map<String, Object>>) field.get("players");
             if (players == null || players.size() < 2) return;
+
+            List<Map<String, Object>> cardPlayers = null;
+            if (cardDataObj instanceof Map) {
+                cardPlayers = (List<Map<String, Object>>) ((Map<String, Object>) cardDataObj).get("players");
+            }
 
             Player[] javaPlayers = {state.getPlayerA(), state.getPlayerB()};
 
@@ -124,22 +122,85 @@ public class OcgCoreAdapter implements OcgCorePort {
                 Player p = javaPlayers[idx];
                 if (fp == null || p == null) continue;
 
-                syncZoneList(p.getMonsterZones(), (List<Map<String, Object>>) fp.get("monsterZones"));
-                syncZoneList(p.getSpellTrapZones(), (List<Map<String, Object>>) fp.get("spellTrapZones"));
+                syncZoneList(p.getMonsterZones(),
+                        (List<Map<String, Object>>) fp.get("monsterZones"),
+                        cardPlayers != null ? (List<Object>) cardPlayers.get(idx).get("monsterZones") : null);
+                syncZoneList(p.getSpellTrapZones(),
+                        (List<Map<String, Object>>) fp.get("spellTrapZones"),
+                        cardPlayers != null ? (List<Object>) cardPlayers.get(idx).get("spellTrapZones") : null);
 
-                int deckCount = asInt(fp.get("deckCount"));
-                int handCount = asInt(fp.get("handCount"));
-                int graveCount = asInt(fp.get("graveCount"));
-                int removedCount = asInt(fp.get("removedCount"));
-
-                trimList(p.getDeck(), deckCount);
-                trimList(p.getHand(), handCount);
-                trimList(p.getGraveyard(), graveCount);
-                trimList(p.getBanished(), removedCount);
+                syncPile(p.getHand(),
+                        cardPlayers != null ? (List<Object>) cardPlayers.get(idx).get("hand") : null);
+                syncPile(p.getGraveyard(),
+                        cardPlayers != null ? (List<Object>) cardPlayers.get(idx).get("grave") : null);
+                syncPile(p.getBanished(),
+                        cardPlayers != null ? (List<Object>) cardPlayers.get(idx).get("removed") : null);
+                syncPile(p.getDeck(),
+                        cardPlayers != null ? (List<Object>) cardPlayers.get(idx).get("deck") : null);
             }
         } catch (Exception e) {
             log.warn("Failed to sync field positions: {}", e.getMessage());
         }
+    }
+
+    private void syncZoneList(List<Zone> zones, List<Map<String, Object>> fieldZones, List<Object> cardDataZones) {
+        if (fieldZones == null || zones == null) return;
+        for (int i = 0; i < Math.min(zones.size(), fieldZones.size()); i++) {
+            Map<String, Object> fz = fieldZones.get(i);
+            Zone z = zones.get(i);
+            if (fz == null || z == null) continue;
+            boolean present = Boolean.TRUE.equals(fz.get("present"));
+
+            if (!present && (cardDataZones == null || i >= cardDataZones.size() || cardDataZones.get(i) == null)) {
+                z.setCard(null);
+                z.setPosition(CardPosition.ATTACK);
+            } else {
+                int pos = asInt(fz.get("position"));
+                z.setPosition(mapCardPosition(pos));
+
+                if (cardDataZones != null && i < cardDataZones.size()) {
+                    Object cardObj = cardDataZones.get(i);
+                    if (cardObj instanceof Map) {
+                        Map<String, Object> cm = (Map<String, Object>) cardObj;
+                        z.setCard(buildCardFromCode(cm));
+                    }
+                }
+            }
+        }
+    }
+
+    private void syncPile(List<Card> pile, List<Object> cardData) {
+        if (pile == null) return;
+        pile.clear();
+        if (cardData == null) return;
+        for (Object obj : cardData) {
+            if (obj instanceof Map) {
+                Map<String, Object> cm = (Map<String, Object>) obj;
+                pile.add(buildCardFromCode(cm));
+            } else {
+                pile.add(null);
+            }
+        }
+    }
+
+    private Card buildCardFromCode(Map<String, Object> cm) {
+        long code = asLong(cm.get("code"));
+        String cardId = String.valueOf(code);
+        CardType type = CardType.MONSTER;
+        if (cm.containsKey("type")) {
+            int rawType = asInt(cm.get("type"));
+            if ((rawType & 0x2) != 0) type = CardType.SPELL;
+            else if ((rawType & 0x4) != 0) type = CardType.TRAP;
+        }
+        return Card.builder()
+                .cardId(cardId)
+                .name("Card " + code)
+                .code(code)
+                .type(type)
+                .atk(asInt(cm.getOrDefault("atk", 0)))
+                .def(asInt(cm.getOrDefault("def", 0)))
+                .level(asInt(cm.getOrDefault("level", 0)))
+                .build();
     }
 
     private void syncZoneList(List<Zone> zones, List<Map<String, Object>> fieldZones) {
@@ -165,18 +226,13 @@ public class OcgCoreAdapter implements OcgCorePort {
         return CardPosition.ATTACK;
     }
 
-    private void trimList(List<?> list, int targetSize) {
-        if (list == null) return;
-        while (list.size() > targetSize) {
-            list.remove(list.size() - 1);
-        }
-        while (list.size() < targetSize) {
-            list.add(null);
-        }
-    }
-
     private int asInt(Object value) {
         if (value instanceof Number n) return n.intValue();
+        return 0;
+    }
+
+    private long asLong(Object value) {
+        if (value instanceof Number n) return n.longValue();
         return 0;
     }
 

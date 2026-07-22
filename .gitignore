@@ -21,3 +21,10 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# Downloaded local duel runtime (pinned by runtime/versions.env)
+.local-runtime/
+
+# Generated web-client dependencies and bundles
+**/node_modules/
+**/dist/

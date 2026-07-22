@@ -29,7 +29,12 @@ FetchContent_Declare(
     GIT_SHALLOW    TRUE
 )
 
-FetchContent_MakeAvailable(lua54 ygopro-core nlohmann_json)
+FetchContent_Declare(
+    sqlite3
+    URL https://www.sqlite.org/2025/sqlite-amalgamation-3480000.zip
+)
+
+FetchContent_MakeAvailable(lua54 ygopro-core nlohmann_json sqlite3)
 
 # ── Lua 5.4 static library ──────────────────────────
 file(GLOB LUA_SOURCES ${lua54_SOURCE_DIR}/*.c)
@@ -78,7 +83,8 @@ target_link_libraries(ocgcore-core PUBLIC lua54)
 set_target_properties(ocgcore-core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # ── Bridge shared library ───────────────────────────
-set(OCGCORE_BRIDGE_SOURCES src/ocgcore_bridge.cpp)
+file(GLOB SQLITE3_SOURCES ${sqlite3_SOURCE_DIR}/*.c)
+set(OCGCORE_BRIDGE_SOURCES src/ocgcore_bridge.cpp ${SQLITE3_SOURCES})
 
 add_library(ocgcore SHARED ${OCGCORE_BRIDGE_SOURCES})
 
@@ -91,7 +97,10 @@ target_include_directories(ocgcore
         ${ygopro-core_SOURCE_DIR}
         ${lua54_SOURCE_DIR}
         ${nlohmann_json_SOURCE_DIR}/single_include
+        ${sqlite3_SOURCE_DIR}
 )
+
+target_compile_definitions(ocgcore PRIVATE SQLITE_THREADSAFE=1 SQLITE_OMIT_LOAD_EXTENSION)
 
 if(WIN32)
     target_include_directories(ocgcore PRIVATE ${JNI_INCLUDE_DIRS}/win32)
@@ -105,6 +114,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             -Wl,--no-whole-archive
             ocgcore-core
             ${CMAKE_DL_LIBS}
+            z
     )
 else()
     target_link_libraries(ocgcore
@@ -112,6 +122,7 @@ else()
             ocgcore-core
             lua54
             ${CMAKE_DL_LIBS}
+            z
     )
 endif()
 

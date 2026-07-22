@@ -3,6 +3,12 @@
 > Registro vivo do progresso do projeto. Atualizado a cada mudanca de estado de uma funcionalidade.
 > **Ultima atualizacao:** 2026-07-09 — Sessao de trabalho: sincronizacao de posicoes via field_data (NATIVE-009), desenho da mao pelo motor C++ (NATIVE-010)
 
+> **IMPORTANTE (2026-07-21):** este arquivo preserva o historico anterior, que
+> inclui tarefas concluidas sobre o antigo stub e nao comprova uma partida
+> jogavel. O backlog canonico atual e
+> [docs/local-duel-backlog.md](docs/local-duel-backlog.md). Nenhuma tarefa de
+> gameplay nova deve ser adicionada abaixo.
+
 ---
 
 ## Sobre o Projeto
