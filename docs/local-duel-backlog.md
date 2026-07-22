@@ -221,11 +221,11 @@ partida com decks de smoke.
 
 ### WEB-LOCAL-004 - Acoes contextuais no campo
 
-- [ ] Manter o inspetor de carta disponivel no hover e fixa-lo no clique.
-- [ ] Exibir summon, set, ativacao e ataque diretamente na carta ou zona legal.
-- [ ] Mostrar a corrente em uma faixa compacta que nao substitui o inspetor.
-- [ ] Reservar o painel lateral para escolhas globais sem alvo espacial.
-- [ ] Preservar suporte a toque com selecao da carta antes da acao.
+- [x] Manter o inspetor de carta disponivel no hover e fixa-lo no clique.
+- [x] Exibir summon, set, ativacao e ataque diretamente na carta ou zona legal.
+- [x] Mostrar a corrente em uma faixa compacta que nao substitui o inspetor.
+- [x] Reservar o painel lateral exclusivamente para o inspetor de carta.
+- [x] Preservar os controles contextuais em viewports de toque.
 
 Aceite: o fluxo principal nao depende de uma lista lateral e nenhuma decisao
 oculta as informacoes da carta inspecionada.
@@ -283,6 +283,9 @@ O projeto e jogavel somente quando todos estes pontos forem verdadeiros:
 - nenhum pacote de protocolo ignorado e nenhum erro de pagina durante o smoke
   completo;
 - layout validado em 1600x1000 e 390x844 sem overflow horizontal;
+- acoes de summon, set, ativacao e ataque ancoradas nas cartas do prompt;
+- inspetor preservado durante a Main Phase e controles dentro do viewport em
+  1600x1000 e 390x844;
 - nenhum teste unitario foi executado;
 
 - `bash -n dev.sh`: sucesso;
