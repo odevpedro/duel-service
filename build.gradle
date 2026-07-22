@@ -21,7 +21,7 @@ def libName = osName.contains('win') ? 'ocgcore.dll'
 task buildNative(type: Exec) {
     description = 'Build the native ocgcore JNI bridge library via CMake'
     workingDir = file('native/ocgcore-bridge')
-    commandLine 'cmake', '--build', 'build', '--config', 'Release'
+    commandLine 'cmake', '--build', 'build', '--config', 'Release', '--parallel'
     doFirst {
         if (!file('native/ocgcore-bridge/build').exists()) {
             throw new GradleException(
@@ -52,7 +52,14 @@ task fullBuildNative {
     dependsOn configureNative, copyNativeLib
 }
 
+task localBuild {
+    group = 'development'
+    description = 'Compile local application classes without tests or packaging'
+    dependsOn classes
+}
+
 bootJar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     from(nativeResourcesDir) {
         into 'BOOT-INF/classes/native'
     }

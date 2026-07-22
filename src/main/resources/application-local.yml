@@ -1,12 +1,14 @@
 spring:
   kafka:
-    bootstrap-servers: localhost:19092
+    bootstrap-servers: ""
     producer:
       acks: 0
       properties:
         max.block.ms: 100
         retries: 0
         metadata.max.age.ms: 100
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
 
 management:
   endpoint:
@@ -18,3 +20,7 @@ management:
 logging:
   level:
     com.odevpedro.yugiohcollections.duel: DEBUG
+
+duel:
+  auth:
+    enabled: false

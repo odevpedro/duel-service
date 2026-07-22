@@ -1,6 +1,7 @@
 package com.odevpedro.yugiohcollections.duel.application.service.Impl;
 
 import com.odevpedro.yugiohcollections.duel.application.dto.CreateDuelRequest;
+import com.odevpedro.yugiohcollections.duel.application.dto.DuelActionDTO;
 import com.odevpedro.yugiohcollections.duel.application.dto.DuelResponse;
 import com.odevpedro.yugiohcollections.duel.application.mapper.DuelMapper;
 import com.odevpedro.yugiohcollections.duel.application.mapper.DuelHistoryMapper;
@@ -15,6 +16,7 @@ import com.odevpedro.yugiohcollections.duel.domain.model.enums.GameStatus;
 import com.odevpedro.yugiohcollections.duel.domain.model.enums.Phase;
 import com.odevpedro.yugiohcollections.duel.domain.model.enums.ZoneType;
 import com.odevpedro.yugiohcollections.duel.domain.port.DuelRepositoryPort;
+import com.odevpedro.yugiohcollections.duel.domain.port.OcgCorePort;
 import com.odevpedro.yugiohcollections.duel.adapter.out.persistence.repository.DuelHistoryRepository;
 import com.odevpedro.yugiohcollections.duel.adapter.out.external.DeckFeignClient;
 import com.odevpedro.yugiohcollections.duel.adapter.out.external.DeckViewResponse;
@@ -41,11 +43,16 @@ import java.util.Map;
 public class DuelApplicationServiceImpl implements DuelApplicationService {
 
     private static final int INITIAL_LIFE_POINTS = 8000;
-    private static final int INITIAL_HAND_SIZE = 0;
+    // Initial hand size handled by drawCards in createDuel
     private static final int DEMO_DECK_SIZE = 40;
     private static final String DEFAULT_DUEL_TYPE = "CASUAL";
 
+    private static final List<Long> MONSTER_CODES = List.of(89631139L, 46986414L, 78033274L, 38318146L, 52112003L, 76512645L, 38040763L, 65878844L, 40640057L, 75347539L);
+    private static final List<Long> SPELL_CODES = List.of(53129443L, 83764718L, 55144522L, 72302403L, 83555661L, 19613556L, 70828912L);
+    private static final List<Long> TRAP_CODES = List.of(49532749L, 44178886L, 77622396L, 68005187L, 20025379L, 62279055L, 25955164L);
+
     private final DuelRepositoryPort repository;
+    private final OcgCorePort ocgCorePort;
     private final DuelHistoryRepository historyRepository;
     private final DeckFeignClient deckFeignClient;
     private final DuelLifecycleKafkaPublisher lifecyclePublisher;
@@ -78,8 +85,14 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
                 .updatedAt(LocalDateTime.now())
                 .firstTurn(true)
                 .build();
-
         DuelState saved = repository.save(state);
+
+        DuelActionDTO initAction = new DuelActionDTO();
+        initAction.setDuelId(saved.getDuelId());
+        initAction.setActionType("NONE");
+        ocgCorePort.processAction(saved, initAction, saved.getPlayerAId());
+        repository.save(saved);
+
         lifecyclePublisher.publishDuelStarted(saved);
         meterRegistry.counter("duel.created").increment();
         return mapper.toResponse(saved);
@@ -104,8 +117,9 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
     }
 
     private List<Zone> createZones(ZoneType type) {
+        int count = type == ZoneType.MONSTER ? 7 : 8;
         List<Zone> zones = new ArrayList<>();
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < count; i++) {
             zones.add(Zone.builder()
                     .index(i)
                     .type(type)
@@ -175,10 +189,15 @@ public class DuelApplicationServiceImpl implements DuelApplicationService {
                     ? CardType.TRAP
                     : i % 5 == 0 ? CardType.SPELL : CardType.MONSTER;
 
-            long cardCode = type == CardType.MONSTER ? 89631139L + i : 0L;
+            long cardCode = switch (type) {
+                case MONSTER -> MONSTER_CODES.get(i % MONSTER_CODES.size());
+                case SPELL -> SPELL_CODES.get(i % SPELL_CODES.size());
+                case TRAP -> TRAP_CODES.get(i % TRAP_CODES.size());
+            };
+
             cards.add(Card.builder()
-                    .cardId("demo-" + i)
-                    .name(type == CardType.MONSTER ? "Demo Monster " + i : "Demo " + type.name() + " " + i)
+                    .cardId(String.valueOf(cardCode))
+                    .name("Card " + cardCode)
                     .imageUrl(null)
                     .atk(type == CardType.MONSTER ? 900 + (i * 40) : 0)
                     .def(type == CardType.MONSTER ? 800 + (i * 35) : 0)

@@ -9,6 +9,7 @@ public class OcgCoreBridgeResponse {
     private String currentPhase;
     private String status;
     private EngineResult engine;
+    private Object cardData;
 
     @Data
     public static class EngineResult {

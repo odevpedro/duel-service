@@ -9,8 +9,14 @@ import com.odevpedro.yugiohcollections.duel.application.service.PhaseService;
 import com.odevpedro.yugiohcollections.duel.adapter.out.messaging.DuelLifecycleKafkaPublisher;
 import com.odevpedro.yugiohcollections.duel.config.StompPrincipal;
 import com.odevpedro.yugiohcollections.duel.domain.model.DuelState;
+import com.odevpedro.yugiohcollections.duel.domain.model.Card;
+import com.odevpedro.yugiohcollections.duel.domain.model.Player;
+import com.odevpedro.yugiohcollections.duel.domain.model.Zone;
+import com.odevpedro.yugiohcollections.duel.domain.model.enums.CardType;
 import com.odevpedro.yugiohcollections.duel.domain.model.enums.GameStatus;
 import com.odevpedro.yugiohcollections.duel.domain.port.DuelEventPublisherPort;
+
+import java.util.ArrayList;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.validation.Valid;
@@ -118,7 +124,10 @@ public class DuelActionHandler {
                 if (s.getStatus() != GameStatus.IN_PROGRESS) return;
                 if (!BotPlayerService.BOT_ID.equals(s.getActivePlayerId())) return;
 
-                s = phaseService.advance(s);
+                // Let the C++ bridge handle all AI decisions via build_response()
+                // The bridge handles SELECT_IDLECMD, SELECT_BATTLECMD, SELECT_POSITION, etc.
+                // Just advance phases and the engine's automated responses handle the rest
+                s = phaseService.advance(duelService.findById(duelId));
                 publisher.publishStateUpdate(duelId, s);
                 publishGameOverIfNeeded(duelId, s);
                 triggerBot(duelId);

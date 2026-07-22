@@ -6,6 +6,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import java.security.Principal;
 import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 
 public class StompPrincipal implements Principal {
 
@@ -34,5 +35,19 @@ public class StompPrincipal implements Principal {
 
     public Collection<? extends GrantedAuthority> getAuthorities() {
         return List.of(new SimpleGrantedAuthority("ROLE_" + role));
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        StompPrincipal that = (StompPrincipal) o;
+        return Objects.equals(username, that.username);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(username);
     }
 }

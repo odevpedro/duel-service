@@ -6,6 +6,7 @@ import com.odevpedro.yugiohcollections.duel.application.dto.history.DuelHistoryR
 import com.odevpedro.yugiohcollections.duel.application.mapper.DuelHistoryMapper;
 import com.odevpedro.yugiohcollections.duel.application.mapper.DuelMapper;
 import com.odevpedro.yugiohcollections.duel.application.service.DuelApplicationService;
+import com.odevpedro.yugiohcollections.duel.application.service.PhaseService;
 import com.odevpedro.yugiohcollections.duel.domain.model.DuelState;
 import com.odevpedro.yugiohcollections.duel.adapter.out.persistence.repository.DuelHistoryRepository;
 import com.odevpedro.yugiohcollections.duel.domain.port.DuelEventPublisherPort;
@@ -27,6 +28,7 @@ public class DuelController {
     private final DuelHistoryRepository historyRepository;
     private final DuelHistoryMapper historyMapper;
     private final DuelEventPublisherPort publisher;
+    private final PhaseService phaseService;
 
     @PostMapping
     public ResponseEntity<DuelResponse> createDuel(@Valid @RequestBody CreateDuelRequest request) {
@@ -48,6 +50,14 @@ public class DuelController {
         DuelState state = duelService.findById(duelId);
         publisher.publishStateUpdate(duelId, state);
         return ResponseEntity.ok(mapper.toResponse(state));
+    }
+
+    @PostMapping("/{duelId}/advance")
+    public ResponseEntity<DuelResponse> advanceDuel(@PathVariable String duelId) {
+        DuelState state = duelService.findById(duelId);
+        DuelState updated = phaseService.advance(state);
+        publisher.publishStateUpdate(duelId, updated);
+        return ResponseEntity.ok(mapper.toResponse(updated));
     }
 
     @GetMapping("/{duelId}/history")

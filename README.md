@@ -1,5 +1,11 @@
 # duel-service
 
+> **Direcao atual:** entregar primeiro uma partida local no navegador usando
+> ocgcore, CardScripts, cards.cdb e WindBot reais. Nao existe stub ou fallback
+> de regras. Consulte
+> [docs/local-duel-backlog.md](docs/local-duel-backlog.md) antes de alterar
+> gameplay.
+
 > Motor de duelos Yu-Gi-Oh! em tempo real dibangun dengan Spring Boot e WebSocket (STOMP), alimentado pelo motor C++ ocgcore via JNI. Parte do ecossistema de microsserviços yu-gi-oh-collections.
 
 ---
@@ -17,7 +23,7 @@ API REST e WebSocket para gerenciamento de duelos Yu-Gi-Oh! em tempo real, integ
 | Runtime       | Java 21                              |
 | Framework     | Spring Boot 3.2                      |
 | Real-time     | WebSocket + STOMP (SockJS)           |
-| Game Engine   | ygopro-core (C++) via JNI bridge, com fallback Stub |
+| Game Engine   | ygopro-core (C++), sem stub ou fallback de regras  |
 | State Storage | Redis com fallback InMemory          |
 | Build        | Gradle                               |
 | Testes        | JUnit / Spring Boot Test              |
@@ -67,17 +73,16 @@ native/
 - CMake 3.20+ (para build da lib nativa)
 - Compilador C++20
 
-### Setup rápido (com fallback Stub)
+### Duelo local rápido
 
 ```bash
-# Sobe apenas o Redis (opcional, para desenvolvimento)
-docker compose up -d
-
-# Roda o serviço no perfil dev (usa OcgCoreStub, sem lib nativa)
-./gradlew bootRun
+./start-test.sh
 ```
 
-A API estará disponível em `http://localhost:8084`.
+Abra `http://localhost:5173/duel/local`. Esse fluxo sobe somente Evolution,
+ocgcore, CardScripts, cards.cdb, WindBot e o frontend original. Spring Boot,
+auth, Redis, Kafka, PostgreSQL, card-service e deck-service não participam do
+teste local.
 
 ### Setup com biblioteca nativa (produção)
 
@@ -107,11 +112,10 @@ converte as chamadas JNI em chamadas para a API C do ygopro-core.
 └──────────────────┘              └──────────────────┘               └──────────────┘
 ```
 
-### Fallback automático
+### Carregamento obrigatório
 
-Se a biblioteca nativa não estiver disponível, o `OcgCoreStub` (Java puro)
-assume o processamento. A decisão é automática e transparente para o
-restante do sistema.
+Não existe fallback para stub. Se a biblioteca nativa ou seus recursos não
+estiverem disponíveis, o runtime falha explicitamente.
 
 ### Compilando a biblioteca nativa
 

@@ -2,16 +2,15 @@ package com.odevpedro.yugiohcollections.duel.adapter.out.ocgcore;
 
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+
 @Slf4j
 @Component
-@Profile({"local", "docker", "prod"})
 public class OcgCoreLoader {
 
     private static volatile boolean loaded;
@@ -24,12 +23,11 @@ public class OcgCoreLoader {
 
         try (InputStream in = getClass().getResourceAsStream(RESOURCE_PATH)) {
             if (in == null) {
-                log.warn(
-                        "Native library not found in JAR: " + RESOURCE_PATH +
-                                "\nCompile the ocgcore and place it in src/main/resources/native/"
-                );
                 loaded = false;
-                return;
+                throw new IllegalStateException(
+                        "Native ocgcore library not found at " + RESOURCE_PATH
+                                + ". Run ./gradlew fullBuildNative before starting the service."
+                );
             }
 
             Path temp = Files.createTempFile("ocgcore-", "-" + LIB_NAME);
@@ -41,7 +39,8 @@ public class OcgCoreLoader {
             loaded = true;
         } catch (Throwable t) {
             loaded = false;
-            log.warn("Failed to load native ocgcore, fallback will be used: {}", t.getMessage());
+            log.error("Failed to load native ocgcore; no stub or fallback is available", t);
+            throw new IllegalStateException("Native ocgcore is required", t);
         }
     }
 
